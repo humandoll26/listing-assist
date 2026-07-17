@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商品データ管理・出品支援 MVP</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Inventory-first Serverless MVP</p>
+        <h1>商品データ管理・出品支援ツール</h1>
+        <p class="hero-copy">
+          在庫の保管場所をすぐ見つけられる一覧台帳です。あわせて、メルカリやヤフオク向けの説明文づくりと出品補助に使える情報をまとめて管理できます。
+        </p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card">
+          <span class="stat-label">商品数</span>
+          <strong id="productCount">0</strong>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">在庫合計</span>
+          <strong id="stockCount">0</strong>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">保管場所数</span>
+          <strong id="locationCount">0</strong>
+        </div>
+      </div>
+    </header>
+
+    <section class="panel panel-tools">
+      <div class="panel-heading">
+        <h2>補助メニュー</h2>
+      </div>
+      <details class="optional-tools" open>
+        <summary>出品補助の使い方</summary>
+        <div class="assist-guide">
+          <p>1. 在庫一覧の「メルカリ」または「ヤフオク」ボタンから補助データを準備します。</p>
+          <p>2. メルカリは拡張機能と連携し、ヤフオクは補助データをクリップボードへコピーします。</p>
+          <p>3. 商品タイトル、説明文、画像などを確認しながら出品画面に反映します。</p>
+        </div>
+      </details>
+      <details class="optional-tools">
+        <summary>バックアップ / インポート</summary>
+        <p class="section-helper">
+          日常的に使う保存・読込はこちらです。Drive同期を使う場合も、保存と読込の操作自体はこの欄から行います。
+        </p>
+        <div class="tool-grid">
+          <button id="exportJsonButton" class="secondary-button" type="button">JSONを書き出す</button>
+          <button id="exportDriveJsonButton" class="secondary-button" type="button">Driveへ保存</button>
+          <button id="importDriveJsonButton" class="secondary-button" type="button">Driveから読込</button>
+          <button id="exportCsvButton" class="secondary-button" type="button">CSVを書き出す</button>
+          <label class="file-import">
+            <span>一覧CSV種別</span>
+            <select id="csvPlatformHint">
+              <option value="">自動判定</option>
+              <option value="メルカリ">メルカリ</option>
+              <option value="ヤフオク">ヤフオク</option>
+            </select>
+          </label>
+          <label class="file-import">
+            <span>CSVファイルを選択</span>
+            <input id="importCsvInput" type="file" accept=".csv,text/csv">
+          </label>
+          <button id="runImportCsvButton" class="secondary-button" type="button" disabled>選択したCSVを取り込む</button>
+          <label class="file-import">
+            <span>JSONを読み込む</span>
+            <input id="importJsonInput" type="file" accept="application/json">
+          </label>
+          <button id="seedButton" class="ghost-button" type="button">サンプル追加</button>
+        </div>
+      </details>
+      <details class="optional-tools">
+        <summary>Drive同期設定（初回設定・変更時のみ）</summary>
+        <p class="section-helper">
+          この欄は毎回触る必要はありません。OAuthクライアントIDや保存先フォルダを最初に設定するときだけ使います。
+        </p>
+        <div class="drive-sync-panel">
+          <div class="drive-sync-fields">
+            <label>
+              <span>Google OAuthクライアントID</span>
+              <input id="driveClientId" type="text" placeholder="xxxx.apps.googleusercontent.com">
+            </label>
+            <label>
+              <span>DriveファイルIDまたはURL</span>
+              <input id="driveFileId" type="text" placeholder="初回保存後に自動入力。手動入力するならDriveのファイルURLでも可">
+            </label>
+            <label>
+              <span>保存先フォルダIDまたはURL</span>
+              <input id="driveFolderId" type="text" placeholder="任意。保存先フォルダを固定したい場合はDriveのフォルダURLでも可">
+            </label>
+            <label>
+              <span>端末名</span>
+              <input id="syncDeviceName" type="text" placeholder="例: PC-main / smartphone">
+            </label>
+            <label>
+              <span>同期メモ</span>
+              <input id="syncNote" type="text" placeholder="任意。保存時のメモ">
+            </label>
+          </div>
+          <div class="drive-sync-actions">
+            <button id="showDriveSyncGuideButton" class="ghost-button" type="button">Drive同期の使い方</button>
+          </div>
+          <div id="driveSyncInfo" class="drive-sync-info" aria-live="polite"></div>
+        </div>
+      </details>
+      <p id="statusMessage" class="status-message" aria-live="polite"></p>
+    </section>
+
+    <main class="layout">
+      <section class="panel panel-list">
+        <div class="panel-heading">
+          <h2>在庫一覧</h2>
+          <div class="toolbar">
+            <input id="searchInput" type="search" placeholder="SKU・商品名・ブランド・保管場所で検索">
+            <div class="toolbar-actions">
+              <button id="openQuickInventoryButton" class="ghost-button" type="button">スマホ在庫入力</button>
+              <button id="openShelfQrButton" class="ghost-button" type="button">棚QR発行</button>
+              <button id="bulkDeleteButton" class="ghost-button danger-button" type="button" disabled>選択削除</button>
+              <button id="openCreateModalButton" class="primary-button" type="button">新規登録</button>
+            </div>
+          </div>
+        </div>
+        <div id="reviewSummary" class="review-summary" aria-live="polite"></div>
+        <div id="looseInventoryNotice" class="loose-inventory-notice is-hidden" aria-live="polite"></div>
+        <div class="table-wrap">
+          <table class="inventory-table">
+            <thead>
+              <tr>
+                <th class="cell-check"><input id="selectAllCheckbox" type="checkbox" aria-label="表示中の商品をすべて選択"></th>
+                <th>画像</th>
+                <th>SKU</th>
+                <th>商品名</th>
+                <th>保管場所</th>
+                <th>在庫</th>
+                <th>出品/配送</th>
+                <th>更新日</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="productList"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="productCardTemplate">
+    <tr class="inventory-row">
+      <td class="cell-check"><input class="row-select-checkbox" type="checkbox" aria-label="この商品を選択"></td>
+      <td class="cell-photo">
+        <button class="thumb-button" type="button" aria-label="画像を拡大">
+          <img class="thumb-image" alt="">
+        </button>
+      </td>
+      <td class="cell-sku"></td>
+      <td class="cell-title"></td>
+      <td class="cell-storage"></td>
+      <td class="cell-stock"></td>
+      <td class="cell-platform"></td>
+      <td class="cell-updated"></td>
+      <td class="cell-actions">
+        <div class="row-actions">
+          <button class="ghost-button action-confirm-link" type="button" title="商品詳細の状態を確認します">詳細データ確認</button>
+          <button class="ghost-button action-mercari" type="button">メルカリ</button>
+          <button class="ghost-button action-yahoo" type="button">ヤフオク</button>
+          <button class="ghost-button action-inventory" type="button">在庫</button>
+          <button class="ghost-button action-edit" type="button">編集</button>
+          <button class="ghost-button action-delete" type="button">削除</button>
+        </div>
+      </td>
+    </tr>
+  </template>
+
+  <dialog id="productModal" class="product-modal">
+    <form id="productForm" class="product-form" method="dialog">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">Product Database</p>
+          <h2 id="modalTitle">新規登録</h2>
+        </div>
+        <button id="closeModalButton" class="ghost-button" type="button">閉じる</button>
+      </div>
+
+      <input id="productId" type="hidden">
+
+      <div class="form-grid">
+        <label class="wide">
+          <span>画像</span>
+          <input id="photos" name="photos" type="file" accept="image/*" multiple>
+          <small>画像を選ぶと下にプレビューが表示されます。MVPでは先頭画像を一覧サムネイルに使用します。</small>
+        </label>
+        <div class="wide modal-photo-preview-block">
+          <div id="modalPhotoPreview" class="modal-photo-preview"></div>
+        </div>
+
+        <label>
+          <span>管理SKU</span>
+          <input id="sku" name="sku" type="text" placeholder="EKW-001" required>
+        </label>
+        <label>
+          <span>商品名</span>
+          <input id="title" name="title" type="text" placeholder="リネン混ギャザーワンピース" required>
+        </label>
+        <label>
+          <span>出品先プラットフォーム</span>
+          <select id="platform" name="platform">
+            <option value="">未設定</option>
+            <option value="メルカリ">メルカリ</option>
+            <option value="ヤフオク">ヤフオク</option>
+          </select>
+        </label>
+        <label class="wide">
+          <span>プラットフォームURL</span>
+          <div class="field-action-row">
+            <input id="itemUrl" name="itemUrl" type="url" placeholder="https://...">
+            <button id="fetchProductUrlDetailButton" class="secondary-button" type="button">URLから取得</button>
+          </div>
+        </label>
+        <label>
+          <span>プラットフォーム出品ID</span>
+          <input id="platformItemId" name="platformItemId" type="text" placeholder="URLから自動入力可">
+        </label>
+        <label>
+          <span>保管場所</span>
+          <input id="storage" name="storage" type="text" placeholder="棚A-2">
+        </label>
+        <label>
+          <span>在庫数</span>
+          <input id="stock" name="stock" type="number" min="0" step="1" value="1">
+        </label>
+        <label>
+          <span>コンディション</span>
+          <select id="condition" name="condition">
+            <option value="新品、未使用">新品、未使用</option>
+            <option value="未使用に近い">未使用に近い</option>
+            <option value="目立った傷や汚れなし" selected>目立った傷や汚れなし</option>
+            <option value="やや傷や汚れあり">やや傷や汚れあり</option>
+            <option value="傷や汚れあり">傷や汚れあり</option>
+          </select>
+        </label>
+        <label>
+          <span>ブランド</span>
+          <input id="brand" name="brand" type="text" placeholder="Samansa Mos2">
+        </label>
+        <label>
+          <span>カテゴリ</span>
+          <input id="category" name="category" type="text" placeholder="レディース > ワンピース">
+        </label>
+        <label>
+          <span>販売価格</span>
+          <input id="price" name="price" type="number" min="0" step="1" placeholder="1800">
+        </label>
+
+        <div class="wide form-section-label">補足情報</div>
+
+        <label>
+          <span>配送方法</span>
+          <select id="shipping" name="shipping">
+            <option value="">未設定</option>
+            <option value="ネコポス">ネコポス</option>
+            <option value="宅急便コンパクト">宅急便コンパクト</option>
+            <option value="宅急便">宅急便</option>
+            <option value="ゆうパケット">ゆうパケット</option>
+            <option value="ゆうパケットポスト">ゆうパケットポスト</option>
+            <option value="ゆうパケットプラス">ゆうパケットプラス</option>
+            <option value="ゆうパック">ゆうパック</option>
+          </select>
+        </label>
+        <label id="shippingSizeGroup" class="is-hidden">
+          <span>宅急便サイズ</span>
+          <select id="shippingSize" name="shippingSize">
+            <option value="">未設定</option>
+            <option value="60">60サイズ</option>
+            <option value="80">80サイズ</option>
+            <option value="100">100サイズ</option>
+            <option value="120">120サイズ</option>
+            <option value="140">140サイズ</option>
+            <option value="160">160サイズ</option>
+            <option value="180">180サイズ</option>
+            <option value="200">200サイズ</option>
+          </select>
+        </label>
+        <label class="wide">
+          <span>タグ</span>
+          <input id="tags" name="tags" type="text" placeholder="ナチュラル, 夏物, 人気">
+        </label>
+        <label class="wide">
+          <span>商品説明ベース</span>
+          <textarea id="description" name="description" rows="5" placeholder="状態、サイズ感、素材、特徴など"></textarea>
+        </label>
+        <label class="wide">
+          <span>メモ</span>
+          <textarea id="memo" name="memo" rows="3" placeholder="採寸情報 / セット販売候補 など"></textarea>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button class="primary-button" type="submit">保存する</button>
+        <button id="duplicateButton" class="secondary-button" type="button">複製する</button>
+        <button id="resetFormButton" class="ghost-button" type="button">新規入力に戻す</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="inventoryModal" class="product-modal">
+    <form id="inventoryForm" class="product-form" method="dialog">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">Inventory Record</p>
+          <h2 id="inventoryModalTitle">在庫管理</h2>
+        </div>
+        <button id="closeInventoryModalButton" class="ghost-button" type="button">閉じる</button>
+      </div>
+
+      <input id="inventoryProductId" type="hidden">
+
+      <div class="form-grid">
+        <label class="wide">
+          <span>対象商品</span>
+          <input id="inventoryProductName" type="text" readonly>
+        </label>
+        <label>
+          <span>棚番号</span>
+          <div class="field-action-row shelf-code-row">
+            <input id="inventoryShelfCode" name="inventoryShelfCode" type="text" placeholder="A-001">
+            <button id="scanInventoryShelfButton" class="secondary-button" type="button">QRを読む</button>
+          </div>
+        </label>
+        <label>
+          <span>在庫数</span>
+          <input id="inventoryStock" name="inventoryStock" type="number" min="0" step="1" value="1">
+        </label>
+        <label class="wide">
+          <span>紐づけメモ</span>
+          <textarea id="inventoryLinkMemo" name="inventoryLinkMemo" rows="4" placeholder="棚メモ / 紐づけ確認メモ"></textarea>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button class="primary-button" type="submit">保存する</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="looseInventoryModal" class="product-modal">
+    <form id="looseInventoryForm" class="product-form" method="dialog">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">Loose Inventory</p>
+          <h2>かんたん在庫入力</h2>
+        </div>
+        <button id="closeLooseInventoryModalButton" class="ghost-button" type="button">閉じる</button>
+      </div>
+
+      <input id="looseInventoryId" type="hidden">
+
+      <p id="looseInventorySummary" class="loose-inventory-summary">
+        商品マスターにまだ結び付いていない在庫データを保存できます。
+      </p>
+
+      <div class="form-grid">
+        <label class="wide">
+          <span>商品タイトル</span>
+          <input id="looseInventoryTitle" name="looseInventoryTitle" type="text" placeholder="花柄ワンピース / 食器セット など">
+        </label>
+        <label class="wide">
+          <span>販売ページURL</span>
+          <div class="field-action-row">
+            <input id="looseInventoryPlatformUrl" name="looseInventoryPlatformUrl" type="url" placeholder="https://jp.mercari.com/item/...">
+            <button id="fetchLooseInventoryUrlDetailButton" class="secondary-button" type="button">URLから取得</button>
+          </div>
+        </label>
+        <label>
+          <span>棚番号</span>
+          <div class="field-action-row shelf-code-row">
+            <input id="looseInventoryShelfCode" name="looseInventoryShelfCode" type="text" placeholder="A-001">
+            <button id="scanLooseInventoryShelfButton" class="secondary-button" type="button">QRを読む</button>
+          </div>
+        </label>
+        <label>
+          <span>在庫数</span>
+          <input id="looseInventoryStock" name="looseInventoryStock" type="number" min="0" step="1" value="1">
+        </label>
+        <label>
+          <span>入力元</span>
+          <select id="looseInventoryInputDevice" name="looseInventoryInputDevice">
+            <option value="pc">PC</option>
+            <option value="smartphone">スマホ</option>
+            <option value="qr">QR</option>
+            <option value="manual">手動</option>
+          </select>
+        </label>
+        <label class="wide">
+          <span>紐づけメモ</span>
+          <textarea id="looseInventoryLinkMemo" name="looseInventoryLinkMemo" rows="4" placeholder="商品名メモ / 入力時メモ / 紐づけ判断メモ"></textarea>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button class="primary-button" type="submit">保存する</button>
+        <button id="resetLooseInventoryButton" class="ghost-button" type="button">新規入力に戻す</button>
+      </div>
+
+      <section class="loose-inventory-panel">
+        <div class="panel-heading loose-inventory-heading">
+          <h3>自動登録できなかった在庫</h3>
+        </div>
+        <div id="looseInventoryList" class="loose-inventory-list"></div>
+      </section>
+    </form>
+  </dialog>
+
+  <dialog id="listingDetailModal" class="product-modal">
+    <form id="listingDetailForm" class="product-form listing-detail-shell" method="dialog">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">Listing Detail</p>
+          <h2 id="listingDetailModalTitle">商品詳細データ確認・編集</h2>
+        </div>
+        <button id="closeListingDetailModalButton" class="ghost-button" type="button">閉じる</button>
+      </div>
+
+      <input id="listingDetailProductId" type="hidden">
+      <input id="listingDetailListingId" type="hidden">
+      <input id="listingDetailLinkMode" type="hidden">
+
+      <div class="listing-detail-summary">
+        <div class="listing-detail-status">
+          <span class="listing-detail-label">状態</span>
+          <span id="listingDetailStatusBadge" class="link-badge is-missing">商品詳細なし</span>
+        </div>
+        <p id="listingDetailStatusText" class="listing-detail-status-text">
+          この商品には商品詳細データがまだありません。
+        </p>
+      </div>
+
+      <div class="form-grid">
+        <label class="wide">
+          <span>対象商品</span>
+          <input id="listingDetailProductName" type="text" readonly>
+        </label>
+        <label>
+          <span>出品先</span>
+          <input id="listingDetailPlatform" name="listingDetailPlatform" type="text" placeholder="メルカリ / ヤフオク">
+        </label>
+        <label>
+          <span>プラットフォーム出品ID</span>
+          <input id="listingDetailPlatformItemId" name="listingDetailPlatformItemId" type="text" placeholder="URLから自動入力可">
+        </label>
+        <label class="wide">
+          <span>商品URL</span>
+          <div class="field-action-row">
+            <input id="listingDetailPlatformUrl" name="listingDetailPlatformUrl" type="url" placeholder="https://...">
+            <button id="fetchListingDetailUrlDetailButton" class="secondary-button" type="button">URLから取得</button>
+          </div>
+        </label>
+        <label>
+          <span>状態</span>
+          <input id="listingDetailCondition" name="listingDetailCondition" type="text">
+        </label>
+        <label>
+          <span>価格</span>
+          <input id="listingDetailPrice" name="listingDetailPrice" type="number" min="0" step="1">
+        </label>
+        <label class="wide">
+          <span>説明</span>
+          <textarea id="listingDetailDescription" name="listingDetailDescription" rows="4"></textarea>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button id="saveListingDetailButton" class="secondary-button" type="submit">詳細データを保存</button>
+        <button id="listingDetailLinkButton" class="primary-button" type="button">保存してこの商品に紐付ける</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="imagePreviewModal" class="image-preview-modal">
+    <div class="image-preview-shell">
+      <div class="image-preview-header">
+        <strong id="imagePreviewTitle">画像プレビュー</strong>
+        <button id="closeImagePreviewButton" class="ghost-button" type="button">閉じる</button>
+      </div>
+      <img id="imagePreviewLarge" class="image-preview-large" alt="">
+      <dl id="imagePreviewMeta" class="image-preview-meta is-hidden">
+        <div class="image-preview-meta-row">
+          <dt>商品名</dt>
+          <dd id="imagePreviewProductName">-</dd>
+        </div>
+        <div class="image-preview-meta-row">
+          <dt>出品／配送</dt>
+          <dd id="imagePreviewListingShipping">-</dd>
+        </div>
+        <div class="image-preview-meta-row">
+          <dt>保管棚</dt>
+          <dd id="imagePreviewStorage">-</dd>
+        </div>
+      </dl>
+    </div>
+  </dialog>
+
+  <dialog id="csvImportModal" class="csv-import-modal">
+    <div class="csv-import-shell">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">CSV Import Status</p>
+          <h2 id="csvImportTitle">CSV取込ステータス</h2>
+        </div>
+        <button id="closeCsvImportModalButton" class="ghost-button" type="button">閉じる</button>
+      </div>
+      <p id="csvImportBody" class="csv-import-body">CSVの読込状況を表示します。</p>
+      <pre id="csvImportMeta" class="csv-import-meta"></pre>
+    </div>
+  </dialog>
+
+  <dialog id="backupImportConfirmModal" class="csv-import-modal">
+    <div class="csv-import-shell backup-confirm-shell" data-tone="progress">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">Backup Import Check</p>
+          <h2 id="backupImportConfirmTitle">読込前の確認</h2>
+        </div>
+        <button id="closeBackupImportConfirmButton" class="ghost-button" type="button">キャンセル</button>
+      </div>
+      <p id="backupImportConfirmBody" class="csv-import-body">現在のローカルデータを上書きする前に内容を確認してください。</p>
+      <pre id="backupImportConfirmMeta" class="csv-import-meta"></pre>
+      <div class="form-actions backup-confirm-actions">
+        <button id="cancelBackupImportConfirmButton" class="ghost-button" type="button">キャンセル</button>
+        <button id="acceptBackupImportConfirmButton" class="primary-button" type="button">この内容で読込む</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="shelfQrModal" class="product-modal shelf-qr-modal">
+    <div class="shelf-qr-shell">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">Shelf QR Labels</p>
+          <h2>棚QRコード発行</h2>
+        </div>
+        <button id="closeShelfQrModalButton" class="ghost-button" type="button">閉じる</button>
+      </div>
+
+      <p class="form-note">棚番号を入力または連番生成し、A4用紙へ並べて印刷します。同じ棚番号は何度でも再発行できます。</p>
+
+      <section class="shelf-qr-controls">
+        <div class="shelf-qr-control-card">
+          <h3>棚番号を個別入力</h3>
+          <label>
+            <span>複数行またはカンマ区切り</span>
+            <textarea id="shelfQrManualCodes" rows="4" placeholder="A-001&#10;A-002&#10;B-001"></textarea>
+          </label>
+          <button id="addManualShelfCodesButton" class="secondary-button" type="button">発行対象に追加</button>
+        </div>
+
+        <div class="shelf-qr-control-card">
+          <h3>連番で作成</h3>
+          <div class="shelf-range-grid">
+            <label><span>英字</span><input id="shelfQrPrefix" type="text" value="A" maxlength="8" placeholder="A"></label>
+            <label><span>開始</span><input id="shelfQrStart" type="number" min="0" value="1"></label>
+            <label><span>終了</span><input id="shelfQrEnd" type="number" min="0" value="21"></label>
+            <label><span>桁数</span><select id="shelfQrDigits"><option value="3" selected>3桁</option><option value="4">4桁</option></select></label>
+          </div>
+          <button id="addShelfRangeButton" class="secondary-button" type="button">連番を発行対象に追加</button>
+        </div>
+
+        <div class="shelf-qr-control-card">
+          <h3>使用中の棚から選択</h3>
+          <label>
+            <span>複数選択できます</span>
+            <select id="existingShelfCodes" multiple size="5" aria-label="使用中の棚番号"></select>
+          </label>
+          <button id="addExistingShelfCodesButton" class="secondary-button" type="button">選択した棚を追加</button>
+        </div>
+      </section>
+
+      <div class="shelf-qr-output-toolbar">
+        <div>
+          <strong id="shelfQrCount">発行対象 0件</strong>
+          <p id="shelfQrValidationMessage" class="form-note" aria-live="polite">棚番号を追加してください。</p>
+        </div>
+        <label class="shelf-layout-select">
+          <span>A4レイアウト</span>
+          <select id="shelfQrLayout">
+            <option value="large">大きめ・18枚（3列×6行）</option>
+            <option value="standard" selected>標準・21枚（3列×7行）</option>
+            <option value="compact">コンパクト・24枚（3列×8行）</option>
+          </select>
+        </label>
+        <button id="clearShelfQrCodesButton" class="ghost-button" type="button">すべてクリア</button>
+        <button id="printShelfQrButton" class="primary-button" type="button" disabled>印刷／PDF保存</button>
+      </div>
+
+      <div id="shelfQrPreview" class="shelf-qr-preview" aria-live="polite"></div>
+    </div>
+  </dialog>
+
+  <dialog id="qrScannerModal" class="qr-scanner-modal">
+    <div class="qr-scanner-shell">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">Shelf QR Scanner</p>
+          <h2>棚QRを読み取る</h2>
+        </div>
+        <button id="closeQrScannerButton" class="ghost-button" type="button">キャンセル</button>
+      </div>
+      <p id="qrScannerProductName" class="qr-scanner-product"></p>
+      <div class="qr-video-frame">
+        <video id="qrScannerVideo" playsinline muted></video>
+        <div class="qr-scan-guide" aria-hidden="true"></div>
+      </div>
+      <canvas id="qrScannerCanvas" class="is-hidden"></canvas>
+      <p id="qrScannerStatus" class="form-note" aria-live="polite">カメラを起動しています…</p>
+      <div class="form-actions">
+        <button id="retryQrScannerButton" class="secondary-button" type="button">カメラを再起動</button>
+        <button id="cancelQrScannerButton" class="ghost-button" type="button">手動入力に戻る</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="shelfQrPrintArea" class="shelf-qr-print-area" aria-hidden="true"></div>
+
+  <script>
+    (function () {
+      if (location.protocol !== "file:") return;
+      const message = "この画面は file:// 直開きでは不安定です。ローカルサーバーまたはGitHub PagesのHTTPS URLから開いてください。";
+      const status = document.getElementById("statusMessage");
+      if (status) {
+        status.textContent = message;
+        status.style.color = "#9d2f2f";
+      }
+      window.alert(message);
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script type="module" src="bootstrap.js"></script>
+</body>
+</html>

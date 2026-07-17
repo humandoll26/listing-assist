@@ -1,0 +1,15 @@
+.playwright-cli/
+output/
+outputs/
+tmp/
+mercari-assist-extension/
+
+*.csv
+*.cmd
+*.ps1
+*.md
+!README.md
+
+null
+({shelf
+({status
