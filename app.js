@@ -4183,44 +4183,42 @@ async function confirmBeforeDriveOverwrite(metadata, fileId, identity = {}) {
   const fileName = String(metadata?.name || "Driveファイル");
   const mimeType = String(metadata?.mimeType || "");
   const warnings = [];
+  const remoteMayHaveChanged = Boolean(knownModifiedAt && remoteModifiedAt && knownModifiedAt !== remoteModifiedAt);
 
   if (!isKnownFile) {
-    warnings.push("この端末では、対象ファイルを読込または保存した履歴を確認できません。");
-  }
-
-  if (knownModifiedAt && remoteModifiedAt && knownModifiedAt !== remoteModifiedAt) {
-    warnings.push("Drive上のファイルが、前回読込/保存時から更新されている可能性があります。");
+    warnings.push("この端末での読込・保存履歴がありません。");
   }
 
   if (identity.source === "backup-content") {
-    warnings.push("旧形式のDriveファイルとして内容を検証しました。保存後はListing Assist専用ファイルとして識別情報を付与します。");
+    warnings.push("旧形式のバックアップです。保存後に現行形式へ更新されます。");
   }
 
   if (mimeType && mimeType !== "application/json") {
-    warnings.push(`対象ファイルのMIME typeが application/json ではありません: ${mimeType}`);
+    warnings.push(`ファイル形式: ${mimeType}`);
   }
 
   if (!fileName.toLowerCase().endsWith(".json")) {
-    warnings.push("対象ファイル名が .json で終わっていません。別ファイルを指定している可能性があります。");
+    warnings.push("ファイル名が .json で終わっていません。");
   }
 
-  if (warnings.length === 0) {
+  if (!remoteMayHaveChanged && warnings.length === 0) {
     return true;
   }
 
+  const fileDetails = [
+    "対象ファイルのデータ",
+    `ファイル名: ${fileName}`,
+    `Drive更新日時: ${formatDateTime(remoteModifiedAt)}`,
+    `この端末で最後に確認した日時: ${formatDateTime(knownModifiedAt)}`,
+  ];
+  if (warnings.length > 0) {
+    fileDetails.push("", "補足", ...warnings.map((warning) => `・${warning}`));
+  }
+
   return await showBackupImportConfirmModal({
-    title: "Drive上書き前の確認",
-    body: "このまま保存すると、Drive上の既存バックアップを上書きします。内容を確認してください。",
-    meta: [
-      `対象ファイル: ${fileName}`,
-      `現在のDrive更新日時: ${formatDateTime(remoteModifiedAt)}`,
-      `この端末が最後に認識したDrive更新日時: ${formatDateTime(knownModifiedAt)}`,
-      "",
-      "注意:",
-      ...warnings,
-      "",
-      "問題なければ「この内容で保存する」を押してください。",
-    ].join("\n"),
+    title: "Drive保存の確認",
+    body: "Drive上のデータが更新されている可能性があります。保存しますか？",
+    meta: fileDetails.join("\n"),
     acceptLabel: "この内容で保存する",
   });
 }
