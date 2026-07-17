@@ -137,7 +137,6 @@ const elements = {
   looseInventoryId: document.getElementById("looseInventoryId"),
   looseInventoryTitle: document.getElementById("looseInventoryTitle"),
   looseInventoryPlatformUrl: document.getElementById("looseInventoryPlatformUrl"),
-  fetchLooseInventoryUrlDetailButton: document.getElementById("fetchLooseInventoryUrlDetailButton"),
   looseInventoryShelfCode: document.getElementById("looseInventoryShelfCode"),
   looseInventoryStock: document.getElementById("looseInventoryStock"),
   looseInventoryInputDevice: document.getElementById("looseInventoryInputDevice"),
@@ -388,12 +387,6 @@ function bindEvents() {
   elements.closeInventoryModalButton?.addEventListener("click", () => elements.inventoryModal.close());
   elements.closeLooseInventoryModalButton?.addEventListener("click", () => elements.looseInventoryModal.close());
   elements.resetLooseInventoryButton?.addEventListener("click", () => populateLooseInventoryForm());
-  elements.fetchLooseInventoryUrlDetailButton?.addEventListener("click", () => {
-    beginUrlDetailFetch({
-      context: "loose-inventory",
-      url: elements.looseInventoryPlatformUrl?.value.trim() || "",
-    });
-  });
   elements.closeListingDetailModalButton?.addEventListener("click", () => elements.listingDetailModal.close());
   elements.listingDetailPlatformUrl?.addEventListener("change", handleListingDetailUrlChange);
   elements.fetchListingDetailUrlDetailButton?.addEventListener("click", () => {
