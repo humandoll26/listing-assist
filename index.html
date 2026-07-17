@@ -31,6 +31,13 @@
           <span>商品名・SKU・棚番号</span>
           <input id="mobileSearchInput" type="search" placeholder="例：A-001 / EKW-001">
         </label>
+        <label class="mobile-search-field">
+          <span>棚番号で絞り込み</span>
+          <select id="mobileShelfFilter">
+            <option value="all">すべての棚</option>
+            <option value="missing">棚未設定</option>
+          </select>
+        </label>
         <div id="mobileProductList" class="mobile-product-list" aria-live="polite"></div>
       </section>
 
@@ -44,21 +51,6 @@
         <p class="mobile-help">出品URLと最低限の商品情報を登録します。保存時に商品マスター・出品データ・在庫管理へ反映します。</p>
         <button id="mobileOpenQuickInventoryButton" class="mobile-primary-action" type="button">新しい商品を仮登録</button>
         <div id="mobileLooseInventorySummary" class="mobile-info-card"></div>
-      </section>
-
-      <section class="mobile-panel is-hidden" data-mobile-panel="shelf">
-        <div class="mobile-section-heading">
-          <div>
-            <p class="mobile-kicker">商品を選んでQR読取</p>
-            <h2>棚登録</h2>
-          </div>
-        </div>
-        <p class="mobile-help">商品を選ぶとカメラが起動します。QRを読んだあと、棚番号を確認して保存してください。</p>
-        <label class="mobile-search-field">
-          <span>登録する商品を検索</span>
-          <input id="mobileShelfSearchInput" type="search" placeholder="商品名・SKU・現在の棚番号">
-        </label>
-        <div id="mobileShelfProductList" class="mobile-product-list" aria-live="polite"></div>
       </section>
 
       <section class="mobile-panel is-hidden" data-mobile-panel="sync">
@@ -87,7 +79,6 @@
     <nav class="mobile-bottom-nav" aria-label="スマホ版メニュー">
       <button class="mobile-nav-button is-active" type="button" data-mobile-tab="search"><span>検索</span></button>
       <button class="mobile-nav-button" type="button" data-mobile-tab="quick"><span>仮登録</span></button>
-      <button class="mobile-nav-button" type="button" data-mobile-tab="shelf"><span>棚登録</span></button>
       <button class="mobile-nav-button" type="button" data-mobile-tab="sync"><span>同期</span></button>
     </nav>
   </div>

@@ -1373,6 +1373,7 @@ button:hover {
 }
 
 .mobile-search-field input,
+.mobile-search-field select,
 body[data-view-mode="mobile"] .product-form input,
 body[data-view-mode="mobile"] .product-form select,
 body[data-view-mode="mobile"] .product-form textarea {
@@ -1571,7 +1572,7 @@ body[data-view-mode="mobile"] .product-form textarea {
   left: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   width: min(100%, 720px);
   margin: 0 auto;

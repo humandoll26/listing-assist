@@ -108,9 +108,8 @@ const elements = {
   switchToMobileButton: document.getElementById("switchToMobileButton"),
   switchToDesktopButton: document.getElementById("switchToDesktopButton"),
   mobileSearchInput: document.getElementById("mobileSearchInput"),
-  mobileShelfSearchInput: document.getElementById("mobileShelfSearchInput"),
+  mobileShelfFilter: document.getElementById("mobileShelfFilter"),
   mobileProductList: document.getElementById("mobileProductList"),
-  mobileShelfProductList: document.getElementById("mobileShelfProductList"),
   mobileProductCount: document.getElementById("mobileProductCount"),
   mobileOpenQuickInventoryButton: document.getElementById("mobileOpenQuickInventoryButton"),
   mobileLooseInventorySummary: document.getElementById("mobileLooseInventorySummary"),
@@ -347,7 +346,7 @@ function bindEvents() {
     button.addEventListener("click", () => setMobileTab(button.dataset.mobileTab));
   });
   elements.mobileSearchInput?.addEventListener("input", renderMobileProductLists);
-  elements.mobileShelfSearchInput?.addEventListener("input", renderMobileProductLists);
+  elements.mobileShelfFilter?.addEventListener("change", renderMobileProductLists);
   elements.mobileOpenQuickInventoryButton?.addEventListener("click", () => openLooseInventoryModal("smartphone"));
   elements.mobileImportDriveButton?.addEventListener("click", wrapAsyncEvent(importJsonFromDrive));
   elements.mobileExportDriveButton?.addEventListener("click", wrapAsyncEvent(uploadJsonToDrive));
@@ -502,7 +501,7 @@ function setViewMode(mode, persist = false) {
 }
 
 function setMobileTab(tabName) {
-  const availableTabs = new Set(["search", "quick", "shelf", "sync"]);
+  const availableTabs = new Set(["search", "quick", "sync"]);
   const selectedTab = availableTabs.has(tabName) ? tabName : "search";
   state.mobileTab = selectedTab;
   elements.mobilePanels.forEach((panel) => {
@@ -744,15 +743,44 @@ function renderMobileViews() {
 
 function renderMobileProductLists() {
   const searchKeyword = String(elements.mobileSearchInput?.value || "").trim().toLowerCase();
-  const shelfKeyword = String(elements.mobileShelfSearchInput?.value || "").trim().toLowerCase();
-  const searchProducts = state.products.filter((product) => matchesKeyword(product, searchKeyword));
-  const shelfProducts = state.products.filter((product) => matchesKeyword(product, shelfKeyword));
+  refreshMobileShelfFilterOptions();
+  const shelfFilter = String(elements.mobileShelfFilter?.value || "all");
+  const searchProducts = state.products.filter((product) => {
+    if (!matchesKeyword(product, searchKeyword)) return false;
+    const shelfCode = getMobileProductShelfCode(product);
+    if (shelfFilter === "missing") return !shelfCode;
+    if (shelfFilter.startsWith("shelf:")) return shelfCode === shelfFilter.slice(6);
+    return true;
+  });
   if (elements.mobileProductCount) elements.mobileProductCount.textContent = `${searchProducts.length}件`;
-  renderMobileProductCards(elements.mobileProductList, searchProducts, "search");
-  renderMobileProductCards(elements.mobileShelfProductList, shelfProducts, "shelf");
+  renderMobileProductCards(elements.mobileProductList, searchProducts);
 }
 
-function renderMobileProductCards(container, products, mode) {
+function refreshMobileShelfFilterOptions() {
+  if (!elements.mobileShelfFilter) return;
+  const selectedValue = elements.mobileShelfFilter.value || "all";
+  const shelfCodes = [...new Set(state.products.map(getMobileProductShelfCode).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "ja", { numeric: true }));
+  elements.mobileShelfFilter.innerHTML = "";
+  [
+    { value: "all", label: "すべての棚" },
+    { value: "missing", label: "棚未設定" },
+    ...shelfCodes.map((shelfCode) => ({ value: `shelf:${shelfCode}`, label: shelfCode })),
+  ].forEach(({ value, label }) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    elements.mobileShelfFilter.append(option);
+  });
+  elements.mobileShelfFilter.value = Array.from(elements.mobileShelfFilter.options)
+    .some((option) => option.value === selectedValue) ? selectedValue : "all";
+}
+
+function getMobileProductShelfCode(product) {
+  return String(getPrimaryInventory(product.id)?.shelfCode || product.storage || "").trim();
+}
+
+function renderMobileProductCards(container, products) {
   if (!container) return;
   container.innerHTML = "";
   if (products.length === 0) {
@@ -765,8 +793,7 @@ function renderMobileProductCards(container, products, mode) {
 
   const fragment = document.createDocumentFragment();
   products.forEach((product) => {
-    const inventory = getPrimaryInventory(product.id);
-    const shelfCode = inventory?.shelfCode || product.storage || "棚未設定";
+    const shelfCode = getMobileProductShelfCode(product);
     const card = document.createElement("article");
     card.className = "mobile-product-card";
 
@@ -790,17 +817,21 @@ function renderMobileProductCards(container, products, mode) {
     const title = document.createElement("strong");
     title.className = "mobile-product-title";
     title.textContent = product.title || "商品タイトル未設定";
-    const shelf = document.createElement("span");
-    shelf.className = `mobile-shelf-badge${shelfCode === "棚未設定" ? " is-missing" : ""}`;
-    shelf.textContent = shelfCode;
-    content.append(sku, title, shelf);
+    content.append(sku, title);
+    if (shelfCode) {
+      const shelf = document.createElement("span");
+      shelf.className = "mobile-shelf-badge";
+      shelf.textContent = shelfCode;
+      content.append(shelf);
+    }
 
     card.append(imageButton, content);
-    if (mode === "shelf") {
+    if (!shelfCode) {
       const action = document.createElement("button");
       action.type = "button";
       action.className = "mobile-card-action";
-      action.textContent = "棚QRを読む";
+      action.textContent = "棚登録";
+      action.setAttribute("aria-label", `${product.title || product.sku || "商品"}の棚を登録`);
       action.addEventListener("click", wrapAsyncAction(async () => {
         await openMobileShelfRegistration(product.id);
       }));
