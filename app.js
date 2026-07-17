@@ -108,7 +108,7 @@ const elements = {
   switchToMobileButton: document.getElementById("switchToMobileButton"),
   switchToDesktopButton: document.getElementById("switchToDesktopButton"),
   mobileSearchInput: document.getElementById("mobileSearchInput"),
-  mobileShelfFilter: document.getElementById("mobileShelfFilter"),
+  mobileShelfMissingFilter: document.getElementById("mobileShelfMissingFilter"),
   mobileProductList: document.getElementById("mobileProductList"),
   mobileProductCount: document.getElementById("mobileProductCount"),
   mobileOpenQuickInventoryButton: document.getElementById("mobileOpenQuickInventoryButton"),
@@ -346,7 +346,7 @@ function bindEvents() {
     button.addEventListener("click", () => setMobileTab(button.dataset.mobileTab));
   });
   elements.mobileSearchInput?.addEventListener("input", renderMobileProductLists);
-  elements.mobileShelfFilter?.addEventListener("change", renderMobileProductLists);
+  elements.mobileShelfMissingFilter?.addEventListener("change", renderMobileProductLists);
   elements.mobileOpenQuickInventoryButton?.addEventListener("click", () => openLooseInventoryModal("smartphone"));
   elements.mobileImportDriveButton?.addEventListener("click", wrapAsyncEvent(importJsonFromDrive));
   elements.mobileExportDriveButton?.addEventListener("click", wrapAsyncEvent(uploadJsonToDrive));
@@ -743,37 +743,13 @@ function renderMobileViews() {
 
 function renderMobileProductLists() {
   const searchKeyword = String(elements.mobileSearchInput?.value || "").trim().toLowerCase();
-  refreshMobileShelfFilterOptions();
-  const shelfFilter = String(elements.mobileShelfFilter?.value || "all");
+  const showMissingShelfOnly = Boolean(elements.mobileShelfMissingFilter?.checked);
   const searchProducts = state.products.filter((product) => {
     if (!matchesKeyword(product, searchKeyword)) return false;
-    const shelfCode = getMobileProductShelfCode(product);
-    if (shelfFilter === "missing") return !shelfCode;
-    if (shelfFilter.startsWith("shelf:")) return shelfCode === shelfFilter.slice(6);
-    return true;
+    return !showMissingShelfOnly || !getMobileProductShelfCode(product);
   });
   if (elements.mobileProductCount) elements.mobileProductCount.textContent = `${searchProducts.length}件`;
   renderMobileProductCards(elements.mobileProductList, searchProducts);
-}
-
-function refreshMobileShelfFilterOptions() {
-  if (!elements.mobileShelfFilter) return;
-  const selectedValue = elements.mobileShelfFilter.value || "all";
-  const shelfCodes = [...new Set(state.products.map(getMobileProductShelfCode).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, "ja", { numeric: true }));
-  elements.mobileShelfFilter.innerHTML = "";
-  [
-    { value: "all", label: "すべての棚" },
-    { value: "missing", label: "棚未設定" },
-    ...shelfCodes.map((shelfCode) => ({ value: `shelf:${shelfCode}`, label: shelfCode })),
-  ].forEach(({ value, label }) => {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    elements.mobileShelfFilter.append(option);
-  });
-  elements.mobileShelfFilter.value = Array.from(elements.mobileShelfFilter.options)
-    .some((option) => option.value === selectedValue) ? selectedValue : "all";
 }
 
 function getMobileProductShelfCode(product) {

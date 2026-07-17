@@ -1382,6 +1382,28 @@ body[data-view-mode="mobile"] .product-form textarea {
   font-size: 16px;
 }
 
+.mobile-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  min-height: 48px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  color: var(--accent-strong);
+  background: #fffaf3;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-weight: 800;
+}
+
+.mobile-filter-toggle input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent-strong);
+}
+
 .mobile-product-list {
   display: grid;
   gap: 10px;

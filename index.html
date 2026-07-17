@@ -31,12 +31,9 @@
           <span>商品名・SKU・棚番号</span>
           <input id="mobileSearchInput" type="search" placeholder="例：A-001 / EKW-001">
         </label>
-        <label class="mobile-search-field">
-          <span>棚番号で絞り込み</span>
-          <select id="mobileShelfFilter">
-            <option value="all">すべての棚</option>
-            <option value="missing">棚未設定</option>
-          </select>
+        <label class="mobile-filter-toggle">
+          <input id="mobileShelfMissingFilter" type="checkbox">
+          <span>棚未設定のみ表示</span>
         </label>
         <div id="mobileProductList" class="mobile-product-list" aria-live="polite"></div>
       </section>
