@@ -261,10 +261,37 @@ button:hover {
   gap: 10px;
 }
 
+.drive-workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto minmax(250px, 0.8fr);
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 12px;
+  border-color: rgba(169, 93, 38, 0.34);
+  background: linear-gradient(135deg, rgba(255, 250, 243, 0.98), rgba(247, 234, 218, 0.94));
+}
+
+.drive-workspace-copy h2,
+.drive-workspace-copy p {
+  margin: 0;
+}
+
+.drive-workspace-copy > p:last-child {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .drive-sync-primary-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.drive-sync-primary-actions button {
+  min-width: 160px;
+  min-height: 42px;
 }
 
 .drive-sync-fields {
@@ -293,6 +320,12 @@ button:hover {
   color: var(--muted);
   line-height: 1.5;
   font-size: 0.9rem;
+}
+
+.panel-heading-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .table-wrap {
@@ -796,6 +829,61 @@ button:hover {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.file-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.file-tool-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.file-tool-card h3,
+.file-tool-card p {
+  margin: 0;
+}
+
+.file-tool-card h3 {
+  font-size: 1rem;
+}
+
+.file-tool-card p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.file-tool-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.file-tool-actions button {
+  min-height: 40px;
+}
+
+.csv-platform-field {
+  max-width: 260px;
+}
+
+.selected-file-name {
+  overflow-wrap: anywhere;
+}
+
+.test-tools-row {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .file-import {
@@ -1816,6 +1904,10 @@ body[data-view-mode="mobile"] .loose-inventory-panel {
   .hero {
     grid-template-columns: 1fr;
   }
+
+  .drive-workspace {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1833,6 +1925,7 @@ body[data-view-mode="mobile"] .loose-inventory-panel {
   .hero-stats,
   .form-grid,
   .tool-grid,
+  .file-tool-grid,
   .drive-sync-fields {
     grid-template-columns: 1fr;
   }

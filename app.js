@@ -248,6 +248,9 @@ const elements = {
   exportDriveJsonButton: document.getElementById("exportDriveJsonButton"),
   importDriveJsonButton: document.getElementById("importDriveJsonButton"),
   exportCsvButton: document.getElementById("exportCsvButton"),
+  selectImportCsvButton: document.getElementById("selectImportCsvButton"),
+  selectImportJsonButton: document.getElementById("selectImportJsonButton"),
+  selectedCsvFileName: document.getElementById("selectedCsvFileName"),
   reviewSummary: document.getElementById("reviewSummary"),
   looseInventoryNotice: document.getElementById("looseInventoryNotice"),
   importCsvInput: document.getElementById("importCsvInput"),
@@ -400,11 +403,17 @@ function bindEvents() {
   elements.exportDriveJsonButton?.addEventListener("click", wrapAsyncEvent(uploadJsonToDrive));
   elements.importDriveJsonButton?.addEventListener("click", wrapAsyncEvent(importJsonFromDrive));
   elements.exportCsvButton.addEventListener("click", wrapAsyncEvent(exportCsv));
-  elements.importCsvInput.addEventListener("click", () => {
+  elements.selectImportCsvButton?.addEventListener("click", () => {
     elements.importCsvInput.value = "";
+    updateImportCsvButtonState();
+    elements.importCsvInput.click();
   });
   elements.importCsvInput.addEventListener("change", handleImportCsvSelection);
   elements.runImportCsvButton?.addEventListener("click", wrapAsyncEvent(importCsv));
+  elements.selectImportJsonButton?.addEventListener("click", () => {
+    elements.importJsonInput.value = "";
+    elements.importJsonInput.click();
+  });
   elements.importJsonInput.addEventListener("change", wrapAsyncEvent(importJson));
   elements.driveClientId?.addEventListener("input", handleSyncSettingsInput);
   elements.driveFileId?.addEventListener("input", handleSyncSettingsInput);
@@ -645,7 +654,7 @@ async function showEmptyStateHint() {
 
     if (rawImports.length > 0 || listingSummaries.length > 0) {
       setStatus(
-        `商品マスターは0件です。取込履歴 ${rawImports.length} 件 / 出品一覧データ ${listingSummaries.length} 件が残っています。`,
+        `商品マスターは0件です。読み込み履歴 ${rawImports.length} 件 / 出品一覧データ ${listingSummaries.length} 件が残っています。`,
         true,
       );
       return;
@@ -826,7 +835,7 @@ function renderMobileDriveSyncInfo() {
   const exportLabel = state.syncHistory.lastExportAt ? formatDateTime(state.syncHistory.lastExportAt) : "未実行";
   elements.mobileDriveSyncInfo.textContent = [
     `同期設定: ${settingsReady ? "設定済み" : "未設定"}`,
-    `最終読込: ${importLabel}`,
+    `最終読み込み: ${importLabel}`,
     `最終保存: ${exportLabel}`,
     `端末名: ${state.syncSettings.deviceName || getDefaultDeviceName()}`,
   ].join("\n");
@@ -2022,7 +2031,7 @@ function applyScannedDriveConfigQr(rawValue) {
     `クライアントID: ${config.clientId}`,
     `DriveファイルID: ${config.driveFileId}`,
     `保存先フォルダID: ${config.driveFolderId || "未設定"}`,
-    "読み取っただけではDrive読込・保存は実行しません。",
+    "読み取っただけではDriveの読み込み・保存は実行しません。",
   ].join("\n");
   if (!window.confirm(message)) {
     elements.qrScannerStatus.textContent = "同期設定の保存をキャンセルしました。別のQRを読み取れます。";
@@ -2040,7 +2049,7 @@ function applyScannedDriveConfigQr(rawValue) {
   renderMobileDriveSyncInfo();
   stopQrCamera();
   if (elements.qrScannerModal.open) elements.qrScannerModal.close();
-  setStatus("同期設定QRを保存しました。Drive読込を押すとGoogle認証が始まります。");
+  setStatus("同期設定QRを保存しました。「Driveから読み込む」を押すとGoogle認証が始まります。");
   return true;
 }
 
@@ -3004,12 +3013,13 @@ function updateImportCsvButtonState() {
 
   const selectedFile = elements.importCsvInput?.files?.[0] || null;
   const hasFile = Boolean(selectedFile);
-  elements.runImportCsvButton.disabled = state.importInProgress;
+  elements.runImportCsvButton.disabled = state.importInProgress || !hasFile;
   elements.runImportCsvButton.textContent = state.importInProgress
     ? "CSVを読み込み中..."
-    : hasFile
-    ? `選択したCSVを取り込む: ${selectedFile.name}`
-    : "選択したCSVを取り込む";
+    : "CSVを読み込む";
+  if (elements.selectedCsvFileName) {
+    elements.selectedCsvFileName.textContent = hasFile ? `選択中: ${selectedFile.name}` : "ファイル未選択";
+  }
 }
 
 async function importCsv() {
@@ -3017,9 +3027,9 @@ async function importCsv() {
   if (!file) {
     setStatus("先にCSVファイルを選択してください", true);
     showCsvImportModal({
-      title: "CSV取込エラー",
+      title: "CSV読み込みエラー",
       body: "先にCSVファイルを選択してください。",
-      meta: "ファイル未選択のため、取込処理を開始していません。",
+      meta: "ファイル未選択のため、読み込みを開始していません。",
       tone: "error",
     });
     return;
@@ -3039,7 +3049,7 @@ async function importCsv() {
       meta: [
         `ファイル名: ${file.name}`,
         `プラットフォーム指定: ${elements.csvPlatformHint?.value || "自動判定"}`,
-        "処理状態: 読込開始",
+        "処理状態: 読み込み開始",
       ].join("\n"),
       tone: "progress",
     });
@@ -3058,12 +3068,12 @@ async function importCsv() {
     console.info("[Listing Assist] CSV import success", result);
     setStatus(`${result.platform || "CSV"} の一覧を ${result.importedProducts} 件取り込みました${warningSuffix}`);
     showCsvImportModal({
-      title: "CSV取込が完了しました",
+      title: "CSV読み込みが完了しました",
       body: `${result.platform || "CSV"} の一覧を ${result.importedProducts} 件取り込みました${warningSuffix}`,
       meta: [
         `ファイル名: ${file.name}`,
         `検出プラットフォーム: ${result.platform || "未判定"}`,
-        `読込行数: ${result.totalRows}件`,
+        `読み込み行数: ${result.totalRows}件`,
         `登録件数: ${result.importedProducts}件`,
         result.warnings.length > 0 ? `警告: ${result.warnings.join(" / ")}` : "警告: なし",
       ].join("\n"),
@@ -3074,9 +3084,9 @@ async function importCsv() {
     }
   } catch (error) {
     console.error("[Listing Assist] CSV import failed", error);
-    setStatus(`CSV取込に失敗しました: ${error.message}`, true);
+    setStatus(`CSV読み込みに失敗しました: ${error.message}`, true);
     showCsvImportModal({
-      title: "CSV取込に失敗しました",
+      title: "CSV読み込みに失敗しました",
       body: `エラー: ${error.message}`,
       meta: [
         `ファイル名: ${file.name}`,
@@ -3118,7 +3128,7 @@ async function importBackupText(text, { sourceName = "", fallbackExportedAt = ""
 
   const shouldContinue = await confirmBeforeBackupImport(normalizedBackup, sourceName);
   if (!shouldContinue) {
-    setStatus("バックアップ読込をキャンセルしました");
+    setStatus("バックアップの読み込みをキャンセルしました");
     return { imported: false };
   }
 
@@ -3190,7 +3200,7 @@ async function uploadJsonToDrive() {
     const expectedVersion = String(currentDriveMetadata.version || currentDriveMetadata.modifiedTime || "");
     const latestVersion = String(latestMetadata.version || latestMetadata.modifiedTime || "");
     if (expectedVersion && latestVersion && expectedVersion !== latestVersion) {
-      throw new Error("確認中にDrive上のバックアップが更新されました。Driveから読込して内容を確認してから、もう一度保存してください");
+      throw new Error("確認中にDrive上のバックアップが更新されました。Driveから読み込んで内容を確認してから、もう一度保存してください");
     }
   }
   const url = currentFileId
@@ -4152,26 +4162,26 @@ async function confirmBeforeBackupImport(backupPayload, sourceName = "") {
   }
 
   const lines = [
-    `この読込を続けると、現在のローカルデータを上書きします。`,
+    `この読み込みを続けると、現在のローカルデータを上書きします。`,
     "",
-    `読込元: ${incomingLabel}`,
+    `読み込み元: ${incomingLabel}`,
     `バックアップ日時: ${formatDateTime(incomingExportedAt)}`,
     `現在端末の最終更新: ${formatDateTime(localSummary.latestUpdatedAt)}`,
     "",
     `現在端末: 商品 ${localSummary.products} / 詳細 ${localSummary.listings} / 在庫 ${localSummary.inventories}`,
-    `読込データ: 商品 ${incomingCounts.products} / 詳細 ${incomingCounts.listings} / 在庫 ${incomingCounts.inventories}`,
+    `読み込みデータ: 商品 ${incomingCounts.products} / 詳細 ${incomingCounts.listings} / 在庫 ${incomingCounts.inventories}`,
   ];
 
   if (warnings.length > 0) {
     lines.push("", "注意:", ...warnings);
   }
 
-  lines.push("", "問題なければ「この内容で読込む」を押してください。");
+  lines.push("", "問題なければ「この内容で読み込む」を押してください。");
   return await showBackupImportConfirmModal({
-    title: "読込前の確認",
+    title: "読み込み前の確認",
     body: "現在のローカルデータを上書きする前に、件数と更新日時を確認してください。",
     meta: lines.join("\n"),
-    acceptLabel: "この内容で読込む",
+    acceptLabel: "この内容で読み込む",
   });
 }
 
@@ -4186,7 +4196,7 @@ async function confirmBeforeDriveOverwrite(metadata, fileId, identity = {}) {
   const remoteMayHaveChanged = Boolean(knownModifiedAt && remoteModifiedAt && knownModifiedAt !== remoteModifiedAt);
 
   if (!isKnownFile) {
-    warnings.push("この端末での読込・保存履歴がありません。");
+    warnings.push("この端末での読み込み・保存履歴がありません。");
   }
 
   if (identity.source === "backup-content") {
@@ -4247,7 +4257,7 @@ function getLatestLocalActivityAt() {
   }, "");
 }
 
-function showBackupImportConfirmModal({ title, body, meta, acceptLabel = "この内容で読込む" }) {
+function showBackupImportConfirmModal({ title, body, meta, acceptLabel = "この内容で読み込む" }) {
   if (!elements.backupImportConfirmModal) {
     return Promise.resolve(true);
   }
@@ -4362,32 +4372,25 @@ function renderDriveSyncInfo() {
 
   const deviceName = state.syncSettings.deviceName || getDefaultDeviceName();
   const exportLabel = state.syncHistory.lastExportAt
-    ? `${formatDateTime(state.syncHistory.lastExportAt)} / ${describeSyncMode(state.syncHistory.lastExportMode)} / ${state.syncHistory.lastExportFileName || "-"}`
+    ? formatDateTime(state.syncHistory.lastExportAt)
     : "まだ保存していません";
   const importLabel = state.syncHistory.lastImportAt
-    ? `${formatDateTime(state.syncHistory.lastImportAt)} / 保存元 ${state.syncHistory.lastImportedDeviceName || "不明"} / バックアップ日時 ${formatDateTime(state.syncHistory.lastImportedExportedAt)}`
+    ? formatDateTime(state.syncHistory.lastImportAt)
     : "まだ読み込んでいません";
-  const countLabel = state.syncHistory.lastImportedCounts
-    ? `直近の読込件数: 商品 ${state.syncHistory.lastImportedCounts.products || 0} / 詳細 ${state.syncHistory.lastImportedCounts.listings || 0} / 在庫 ${state.syncHistory.lastImportedCounts.inventories || 0}`
-    : "直近の読込件数: なし";
+  const settingsReady = Boolean(state.syncSettings.driveClientId && extractDriveFileId(state.syncSettings.driveFileId));
 
   elements.driveSyncInfo.textContent = [
-    `OAuthクライアントID: ${state.syncSettings.driveClientId ? "設定済み" : "未設定"}`,
-    `DriveファイルID: ${extractDriveFileId(state.syncSettings.driveFileId) || "未設定"}`,
-    `保存先フォルダID: ${extractDriveFolderId(state.syncSettings.driveFolderId) || "未設定"}`,
-    `この端末名: ${deviceName}`,
-    `最終書き出し: ${exportLabel}`,
-    `最終読込: ${importLabel}${state.syncHistory.lastImportedFileName ? ` / ${state.syncHistory.lastImportedFileName}` : ""}`,
-    countLabel,
-    `運用メモ: 初回は Google Cloud で OAuthクライアントID を作り、現在のオリジン（${location.origin}）を承認済みのJavaScript生成元に追加してください。`,
-    "補足: DriveファイルID欄と保存先フォルダ欄は、IDそのものでもDriveのURL貼り付けでも使えます。",
+    `同期設定: ${settingsReady ? "設定済み" : "未設定"}`,
+    `最終読み込み: ${importLabel}`,
+    `最終保存: ${exportLabel}`,
+    `端末名: ${deviceName}`,
   ].join("\n");
   renderMobileDriveSyncInfo();
 }
 
 function showDriveSyncGuide() {
   renderDriveSyncInfo();
-  setStatus("Drive同期の流れ: 1) 初回だけOAuthクライアントIDを設定 → 2) Driveへ保存で自分のDriveにJSON作成 → 3) Driveから読込で最新バックアップを復元");
+  setStatus("Drive同期の流れ: 1) 初回だけOAuthクライアントIDを設定 → 2) Driveへ保存する → 3) Driveから読み込んで最新バックアップを復元する");
 }
 
 function describeSyncMode(mode) {

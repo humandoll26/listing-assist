@@ -58,8 +58,8 @@
           </div>
         </div>
         <div class="mobile-sync-actions">
-          <button id="mobileImportDriveButton" class="mobile-primary-action" type="button">Driveから読込</button>
-          <button id="mobileExportDriveButton" class="mobile-secondary-action" type="button">Driveへ保存</button>
+          <button id="mobileImportDriveButton" class="mobile-primary-action" type="button">Driveから読み込む</button>
+          <button id="mobileExportDriveButton" class="mobile-secondary-action" type="button">Driveへ保存する</button>
         </div>
         <div id="mobileDriveSyncInfo" class="mobile-info-card" aria-live="polite"></div>
         <div class="mobile-sync-actions">
@@ -108,46 +108,62 @@
       </div>
     </header>
 
+    <section class="panel drive-workspace" aria-labelledby="driveWorkspaceTitle">
+      <div class="drive-workspace-copy">
+        <p class="eyebrow">Daily Sync</p>
+        <h2 id="driveWorkspaceTitle">Google Drive同期</h2>
+        <p>別端末で更新した可能性がある場合は、保存する前にDriveから読み込んでください。</p>
+      </div>
+      <div class="drive-sync-primary-actions">
+        <button id="importDriveJsonButton" class="primary-button" type="button">Driveから読み込む</button>
+        <button id="exportDriveJsonButton" class="secondary-button" type="button">Driveへ保存する</button>
+      </div>
+      <div id="driveSyncInfo" class="drive-sync-info" aria-live="polite"></div>
+    </section>
+
     <section class="panel panel-tools">
       <div class="panel-heading">
-        <h2>補助メニュー</h2>
+        <h2>その他の機能</h2>
+        <p class="panel-heading-note">必要なときだけ開いて使用します</p>
       </div>
-      <details class="optional-tools" open>
-        <summary>出品補助の使い方</summary>
-        <div class="assist-guide">
-          <p>1. 在庫一覧の「メルカリ」または「ヤフオク」ボタンから補助データを準備します。</p>
-          <p>2. メルカリは拡張機能と連携し、ヤフオクは補助データをクリップボードへコピーします。</p>
-          <p>3. 商品タイトル、説明文、画像などを確認しながら出品画面に反映します。</p>
-        </div>
-      </details>
       <details class="optional-tools">
-        <summary>バックアップ / インポート</summary>
+        <summary>ファイルの書き出し・読み込み（JSON / CSV）</summary>
         <p class="section-helper">
-          日常的に使う保存・読込はこちらです。Drive同期を使う場合も、保存と読込の操作自体はこの欄から行います。
+          JSONはアプリ全体のバックアップ、CSVは商品一覧の書き出し・読み込みに使用します。
         </p>
-        <div class="tool-grid">
-          <button id="exportJsonButton" class="secondary-button" type="button">JSONを書き出す</button>
-          <button id="exportDriveJsonButton" class="secondary-button" type="button">Driveへ保存</button>
-          <button id="importDriveJsonButton" class="secondary-button" type="button">Driveから読込</button>
-          <button id="exportCsvButton" class="secondary-button" type="button">CSVを書き出す</button>
-          <label class="file-import">
-            <span>一覧CSV種別</span>
-            <select id="csvPlatformHint">
-              <option value="">自動判定</option>
-              <option value="メルカリ">メルカリ</option>
-              <option value="ヤフオク">ヤフオク</option>
-            </select>
-          </label>
-          <label class="file-import">
-            <span>CSVファイルを選択</span>
-            <input id="importCsvInput" type="file" accept=".csv,text/csv">
-          </label>
-          <button id="runImportCsvButton" class="secondary-button" type="button" disabled>選択したCSVを取り込む</button>
-          <label class="file-import">
-            <span>JSONを読み込む</span>
-            <input id="importJsonInput" type="file" accept="application/json">
-          </label>
-          <button id="seedButton" class="ghost-button" type="button">サンプル追加</button>
+        <div class="file-tool-grid">
+          <section class="file-tool-card" aria-labelledby="jsonToolTitle">
+            <div>
+              <h3 id="jsonToolTitle">JSONバックアップ</h3>
+              <p>商品・出品・在庫をまとめて保存、復元します。</p>
+            </div>
+            <div class="file-tool-actions">
+              <button id="exportJsonButton" class="secondary-button" type="button">JSONを書き出す</button>
+              <button id="selectImportJsonButton" class="ghost-button" type="button">JSONを読み込む</button>
+              <input id="importJsonInput" type="file" accept="application/json" hidden>
+            </div>
+          </section>
+          <section class="file-tool-card" aria-labelledby="csvToolTitle">
+            <div>
+              <h3 id="csvToolTitle">CSV商品一覧</h3>
+              <p>一覧を書き出すか、メルカリ・ヤフオクのCSVを取り込みます。</p>
+            </div>
+            <label class="csv-platform-field">
+              <span>読み込むCSVの種類</span>
+              <select id="csvPlatformHint">
+                <option value="">自動判定</option>
+                <option value="メルカリ">メルカリ</option>
+                <option value="ヤフオク">ヤフオク</option>
+              </select>
+            </label>
+            <div class="file-tool-actions">
+              <button id="exportCsvButton" class="secondary-button" type="button">CSVを書き出す</button>
+              <button id="selectImportCsvButton" class="ghost-button" type="button">CSVファイルを選ぶ</button>
+              <input id="importCsvInput" type="file" accept=".csv,text/csv" hidden>
+              <button id="runImportCsvButton" class="primary-button" type="button" disabled>CSVを読み込む</button>
+            </div>
+            <p id="selectedCsvFileName" class="selected-file-name">ファイル未選択</p>
+          </section>
         </div>
       </details>
       <details class="optional-tools">
@@ -182,9 +198,22 @@
             <button id="showDriveSyncGuideButton" class="ghost-button" type="button">Drive同期の使い方</button>
             <button id="showDriveConfigQrButton" class="ghost-button" type="button">スマホ連携QRを表示</button>
           </div>
-          <div id="driveSyncInfo" class="drive-sync-info" aria-live="polite"></div>
+          <p class="section-helper">
+            初回はGoogle Cloudで現在のオリジンを「承認済みのJavaScript生成元」に登録してください。ファイルID・フォルダID欄にはGoogle Driveの共有URLも入力できます。
+          </p>
         </div>
       </details>
+      <details class="optional-tools">
+        <summary>出品補助の使い方</summary>
+        <div class="assist-guide">
+          <p>1. 在庫一覧の「メルカリ」または「ヤフオク」ボタンから補助データを準備します。</p>
+          <p>2. メルカリは拡張機能と連携し、ヤフオクは補助データをクリップボードへコピーします。</p>
+          <p>3. 商品タイトル、説明文、画像などを確認しながら出品画面に反映します。</p>
+        </div>
+      </details>
+      <div class="test-tools-row">
+        <button id="seedButton" class="ghost-button" type="button">テスト用サンプルを追加</button>
+      </div>
       <p id="statusMessage" class="status-message" aria-live="polite"></p>
     </section>
 
@@ -583,11 +612,11 @@
       <div class="modal-heading">
         <div>
           <p class="eyebrow">CSV Import Status</p>
-          <h2 id="csvImportTitle">CSV取込ステータス</h2>
+          <h2 id="csvImportTitle">CSV読み込み状況</h2>
         </div>
         <button id="closeCsvImportModalButton" class="ghost-button" type="button">閉じる</button>
       </div>
-      <p id="csvImportBody" class="csv-import-body">CSVの読込状況を表示します。</p>
+      <p id="csvImportBody" class="csv-import-body">CSVの読み込み状況を表示します。</p>
       <pre id="csvImportMeta" class="csv-import-meta"></pre>
     </div>
   </dialog>
@@ -597,7 +626,7 @@
       <div class="modal-heading">
         <div>
           <p class="eyebrow">Backup Import Check</p>
-          <h2 id="backupImportConfirmTitle">読込前の確認</h2>
+          <h2 id="backupImportConfirmTitle">読み込み前の確認</h2>
         </div>
         <button id="closeBackupImportConfirmButton" class="ghost-button" type="button">キャンセル</button>
       </div>
@@ -605,7 +634,7 @@
       <pre id="backupImportConfirmMeta" class="csv-import-meta"></pre>
       <div class="form-actions backup-confirm-actions">
         <button id="cancelBackupImportConfirmButton" class="ghost-button" type="button">キャンセル</button>
-        <button id="acceptBackupImportConfirmButton" class="primary-button" type="button">この内容で読込む</button>
+        <button id="acceptBackupImportConfirmButton" class="primary-button" type="button">この内容で読み込む</button>
       </div>
     </div>
   </dialog>
