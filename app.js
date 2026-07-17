@@ -20,11 +20,13 @@ const YAHOO_AUCTION_HASH_KEY = "listing-assist-yahoo";
 const DETAIL_FETCH_HASH_KEY = "listing-assist-fetch";
 const SYNC_SETTINGS_STORAGE_KEY = "listing-assist-sync-settings";
 const SYNC_HISTORY_STORAGE_KEY = "listing-assist-sync-history";
+const VIEW_MODE_STORAGE_KEY = "listing-assist-view-mode";
 const DRIVE_API_SCOPE = "https://www.googleapis.com/auth/drive";
 const DRIVE_DISCOVERY_SOURCE_LABEL = "Google Drive";
 const BACKUP_FORMAT = "listing-assist-backup";
 const BACKUP_SCHEMA_VERSION = 2;
 const SHELF_QR_PREFIX = "listing-assist:shelf:v1:";
+const DRIVE_CONFIG_QR_PREFIX = "listing-assist:drive-config:v1:";
 const MAX_SHELF_CODE_LENGTH = 48;
 const MAX_SHELF_QR_BATCH_SIZE = 500;
 const SHELF_QR_LAYOUTS = {
@@ -67,6 +69,9 @@ const state = {
   qrScannerFrameRequest: 0,
   qrScannerActive: false,
   qrBarcodeDetector: null,
+  mobileStatusTimer: 0,
+  viewMode: "desktop",
+  mobileTab: "search",
   importInProgress: false,
   reviewFilter: "all",
   syncSettings: {
@@ -98,6 +103,26 @@ const state = {
 };
 
 const elements = {
+  mobileApp: document.getElementById("mobileApp"),
+  desktopApp: document.getElementById("desktopApp"),
+  switchToMobileButton: document.getElementById("switchToMobileButton"),
+  switchToDesktopButton: document.getElementById("switchToDesktopButton"),
+  mobileSearchInput: document.getElementById("mobileSearchInput"),
+  mobileShelfSearchInput: document.getElementById("mobileShelfSearchInput"),
+  mobileProductList: document.getElementById("mobileProductList"),
+  mobileShelfProductList: document.getElementById("mobileShelfProductList"),
+  mobileProductCount: document.getElementById("mobileProductCount"),
+  mobileOpenQuickInventoryButton: document.getElementById("mobileOpenQuickInventoryButton"),
+  mobileLooseInventorySummary: document.getElementById("mobileLooseInventorySummary"),
+  mobileImportDriveButton: document.getElementById("mobileImportDriveButton"),
+  mobileExportDriveButton: document.getElementById("mobileExportDriveButton"),
+  mobileDriveSyncInfo: document.getElementById("mobileDriveSyncInfo"),
+  mobileScanDriveConfigButton: document.getElementById("mobileScanDriveConfigButton"),
+  mobileShowDriveConfigQrButton: document.getElementById("mobileShowDriveConfigQrButton"),
+  mobileSeedButton: document.getElementById("mobileSeedButton"),
+  mobileStatusMessage: document.getElementById("mobileStatusMessage"),
+  mobilePanels: Array.from(document.querySelectorAll("[data-mobile-panel]")),
+  mobileNavButtons: Array.from(document.querySelectorAll("[data-mobile-tab]")),
   productForm: document.getElementById("productForm"),
   productModal: document.getElementById("productModal"),
   inventoryForm: document.getElementById("inventoryForm"),
@@ -237,7 +262,12 @@ const elements = {
   syncDeviceName: document.getElementById("syncDeviceName"),
   syncNote: document.getElementById("syncNote"),
   showDriveSyncGuideButton: document.getElementById("showDriveSyncGuideButton"),
+  showDriveConfigQrButton: document.getElementById("showDriveConfigQrButton"),
   driveSyncInfo: document.getElementById("driveSyncInfo"),
+  driveConfigQrModal: document.getElementById("driveConfigQrModal"),
+  closeDriveConfigQrButton: document.getElementById("closeDriveConfigQrButton"),
+  driveConfigQrPreview: document.getElementById("driveConfigQrPreview"),
+  driveConfigQrSummary: document.getElementById("driveConfigQrSummary"),
   seedButton: document.getElementById("seedButton"),
   productCount: document.getElementById("productCount"),
   stockCount: document.getElementById("stockCount"),
@@ -267,6 +297,8 @@ async function initializeApp() {
   initialized = true;
   bindEvents();
   loadSyncPreferences();
+  initializeViewMode();
+  configureEnvironmentFeatures();
   syncShippingSizeField(elements.shipping.value);
   updateImportCsvButtonState();
   renderDriveSyncInfo();
@@ -309,6 +341,22 @@ window.addEventListener("message", (event) => {
 });
 
 function bindEvents() {
+  elements.switchToMobileButton?.addEventListener("click", () => setViewMode("mobile", true));
+  elements.switchToDesktopButton?.addEventListener("click", () => setViewMode("desktop", true));
+  elements.mobileNavButtons.forEach((button) => {
+    button.addEventListener("click", () => setMobileTab(button.dataset.mobileTab));
+  });
+  elements.mobileSearchInput?.addEventListener("input", renderMobileProductLists);
+  elements.mobileShelfSearchInput?.addEventListener("input", renderMobileProductLists);
+  elements.mobileOpenQuickInventoryButton?.addEventListener("click", () => openLooseInventoryModal("smartphone"));
+  elements.mobileImportDriveButton?.addEventListener("click", wrapAsyncEvent(importJsonFromDrive));
+  elements.mobileExportDriveButton?.addEventListener("click", wrapAsyncEvent(uploadJsonToDrive));
+  elements.mobileScanDriveConfigButton?.addEventListener("click", wrapAsyncEvent(() => openQrScanner({
+    source: "drive-config",
+    productName: "Drive同期設定",
+  })));
+  elements.mobileShowDriveConfigQrButton?.addEventListener("click", showDriveConfigQr);
+  elements.mobileSeedButton?.addEventListener("click", wrapAsyncEvent(seedSampleData));
   elements.productForm.addEventListener("submit", wrapAsyncEvent(handleSubmit));
   elements.inventoryForm?.addEventListener("submit", wrapAsyncEvent(handleInventorySubmit));
   elements.looseInventoryForm?.addEventListener("submit", wrapAsyncEvent(handleLooseInventorySubmit));
@@ -372,6 +420,9 @@ function bindEvents() {
   elements.syncDeviceName?.addEventListener("input", handleSyncSettingsInput);
   elements.syncNote?.addEventListener("input", handleSyncSettingsInput);
   elements.showDriveSyncGuideButton?.addEventListener("click", showDriveSyncGuide);
+  elements.showDriveConfigQrButton?.addEventListener("click", showDriveConfigQr);
+  elements.closeDriveConfigQrButton?.addEventListener("click", () => elements.driveConfigQrModal?.close());
+  elements.driveConfigQrModal?.addEventListener("click", handleDriveConfigQrModalBackdropClick);
   elements.seedButton.addEventListener("click", wrapAsyncEvent(seedSampleData));
   elements.productModal.addEventListener("click", handleModalBackdropClick);
   elements.inventoryModal?.addEventListener("click", handleInventoryModalBackdropClick);
@@ -405,6 +456,70 @@ function bindEvents() {
   elements.qrScannerModal?.addEventListener("click", handleQrScannerModalBackdropClick);
   elements.qrScannerModal?.addEventListener("close", stopQrCamera);
   window.addEventListener("afterprint", finishShelfQrPrint);
+}
+
+function initializeViewMode() {
+  const requestedMode = new URLSearchParams(location.search).get("view");
+  const savedMode = readViewModePreference();
+  const automaticMode = isMobileViewport() ? "mobile" : "desktop";
+  const initialMode = ["mobile", "desktop"].includes(requestedMode)
+    ? requestedMode
+    : savedMode || automaticMode;
+  setViewMode(initialMode, false);
+}
+
+function readViewModePreference() {
+  try {
+    const value = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return ["mobile", "desktop"].includes(value) ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+function isMobileViewport() {
+  const userAgent = String(globalThis.navigator?.userAgent || "").toLowerCase();
+  return globalThis.matchMedia?.("(max-width: 760px)")?.matches || /iphone|android|mobile/.test(userAgent);
+}
+
+function setViewMode(mode, persist = false) {
+  const normalizedMode = mode === "mobile" ? "mobile" : "desktop";
+  state.viewMode = normalizedMode;
+  document.body.dataset.viewMode = normalizedMode;
+  elements.mobileApp?.classList.toggle("is-hidden", normalizedMode !== "mobile");
+  elements.desktopApp?.classList.toggle("is-hidden", normalizedMode !== "desktop");
+  if (persist) {
+    try {
+      localStorage.setItem(VIEW_MODE_STORAGE_KEY, normalizedMode);
+    } catch {
+      // 表示モードの保存に失敗しても、現在の画面切替は継続する。
+    }
+  }
+  if (normalizedMode === "mobile") {
+    setMobileTab(state.mobileTab || "search");
+    renderMobileViews();
+  }
+}
+
+function setMobileTab(tabName) {
+  const availableTabs = new Set(["search", "quick", "shelf", "sync"]);
+  const selectedTab = availableTabs.has(tabName) ? tabName : "search";
+  state.mobileTab = selectedTab;
+  elements.mobilePanels.forEach((panel) => {
+    panel.classList.toggle("is-hidden", panel.dataset.mobilePanel !== selectedTab);
+  });
+  elements.mobileNavButtons.forEach((button) => {
+    const isActive = button.dataset.mobileTab === selectedTab;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-current", isActive ? "page" : "false");
+  });
+  renderMobileViews();
+}
+
+function configureEnvironmentFeatures() {
+  const environment = String(document.querySelector('meta[name="listing-assist-environment"]')?.content || "production").trim();
+  document.body.dataset.environment = environment;
+  elements.mobileSeedButton?.classList.toggle("is-hidden", environment !== "test");
 }
 
 function wrapAsyncEvent(handler) {
@@ -617,6 +732,115 @@ function renderAll() {
   renderReviewSummary();
   renderLooseInventoryNotice();
   renderLooseInventoryModalState();
+  renderMobileViews();
+}
+
+function renderMobileViews() {
+  if (!elements.mobileApp) return;
+  renderMobileProductLists();
+  renderMobileQuickSummary();
+  renderMobileDriveSyncInfo();
+}
+
+function renderMobileProductLists() {
+  const searchKeyword = String(elements.mobileSearchInput?.value || "").trim().toLowerCase();
+  const shelfKeyword = String(elements.mobileShelfSearchInput?.value || "").trim().toLowerCase();
+  const searchProducts = state.products.filter((product) => matchesKeyword(product, searchKeyword));
+  const shelfProducts = state.products.filter((product) => matchesKeyword(product, shelfKeyword));
+  if (elements.mobileProductCount) elements.mobileProductCount.textContent = `${searchProducts.length}件`;
+  renderMobileProductCards(elements.mobileProductList, searchProducts, "search");
+  renderMobileProductCards(elements.mobileShelfProductList, shelfProducts, "shelf");
+}
+
+function renderMobileProductCards(container, products, mode) {
+  if (!container) return;
+  container.innerHTML = "";
+  if (products.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "mobile-empty-state";
+    empty.textContent = state.products.length === 0 ? "商品はまだ登録されていません。" : "条件に一致する商品がありません。";
+    container.append(empty);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  products.forEach((product) => {
+    const inventory = getPrimaryInventory(product.id);
+    const shelfCode = inventory?.shelfCode || product.storage || "棚未設定";
+    const card = document.createElement("article");
+    card.className = "mobile-product-card";
+
+    const imageButton = document.createElement("button");
+    imageButton.type = "button";
+    imageButton.className = "mobile-product-image-button";
+    imageButton.setAttribute("aria-label", `${product.title || "商品"}の画像を表示`);
+    const image = document.createElement("img");
+    image.src = getPreviewImage(product);
+    image.alt = "";
+    image.loading = "lazy";
+    image.referrerPolicy = "no-referrer";
+    imageButton.append(image);
+    imageButton.addEventListener("click", () => openImagePreview(product));
+
+    const content = document.createElement("div");
+    content.className = "mobile-product-content";
+    const sku = document.createElement("span");
+    sku.className = "mobile-product-sku";
+    sku.textContent = product.sku || "SKU未設定";
+    const title = document.createElement("strong");
+    title.className = "mobile-product-title";
+    title.textContent = product.title || "商品タイトル未設定";
+    const shelf = document.createElement("span");
+    shelf.className = `mobile-shelf-badge${shelfCode === "棚未設定" ? " is-missing" : ""}`;
+    shelf.textContent = shelfCode;
+    content.append(sku, title, shelf);
+
+    card.append(imageButton, content);
+    if (mode === "shelf") {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "mobile-card-action";
+      action.textContent = "棚QRを読む";
+      action.addEventListener("click", wrapAsyncAction(async () => {
+        await openMobileShelfRegistration(product.id);
+      }));
+      card.append(action);
+    }
+    fragment.append(card);
+  });
+  container.append(fragment);
+}
+
+function renderMobileQuickSummary() {
+  if (!elements.mobileLooseInventorySummary) return;
+  const looseCount = getLooseInventories().length;
+  elements.mobileLooseInventorySummary.textContent = looseCount > 0
+    ? `自動登録できず確認待ちの在庫が ${looseCount} 件あります。PC版または入力画面から修正できます。`
+    : "未処理の仮登録データはありません。";
+}
+
+function renderMobileDriveSyncInfo() {
+  if (!elements.mobileDriveSyncInfo) return;
+  const settingsReady = Boolean(state.syncSettings.driveClientId && extractDriveFileId(state.syncSettings.driveFileId));
+  const importLabel = state.syncHistory.lastImportAt ? formatDateTime(state.syncHistory.lastImportAt) : "未実行";
+  const exportLabel = state.syncHistory.lastExportAt ? formatDateTime(state.syncHistory.lastExportAt) : "未実行";
+  elements.mobileDriveSyncInfo.textContent = [
+    `同期設定: ${settingsReady ? "設定済み" : "未設定"}`,
+    `最終読込: ${importLabel}`,
+    `最終保存: ${exportLabel}`,
+    `端末名: ${state.syncSettings.deviceName || getDefaultDeviceName()}`,
+  ].join("\n");
+}
+
+async function openMobileShelfRegistration(productId) {
+  openInventoryModal(productId);
+  state.inventoryInputDevice = "smartphone";
+  const product = state.products.find((item) => item.id === productId) || null;
+  await openQrScanner({
+    target: elements.inventoryShelfCode,
+    source: "inventory",
+    productName: product?.title || product?.sku || "選択中の商品",
+  });
 }
 
 function renderProducts() {
@@ -1480,6 +1704,86 @@ function parseShelfQrPayload(payload) {
   return normalizeShelfCode(raw.slice(SHELF_QR_PREFIX.length));
 }
 
+function buildDriveConfigQrPayload() {
+  const clientId = String(state.syncSettings.driveClientId || "").trim();
+  const driveFileId = extractDriveFileId(state.syncSettings.driveFileId);
+  const driveFolderId = extractDriveFolderId(state.syncSettings.driveFolderId);
+  if (!clientId || !clientId.endsWith(".apps.googleusercontent.com")) {
+    throw new Error("有効なGoogle OAuthクライアントIDを設定してください。");
+  }
+  if (!isValidDriveResourceId(driveFileId)) {
+    throw new Error("DriveファイルIDまたは共有URLを設定してください。");
+  }
+  if (driveFolderId && !isValidDriveResourceId(driveFolderId)) {
+    throw new Error("保存先フォルダIDまたはURLを確認してください。");
+  }
+  return `${DRIVE_CONFIG_QR_PREFIX}${encodeURIComponent(JSON.stringify({
+    type: "listing-assist-drive-config",
+    version: 1,
+    clientId,
+    driveFileId,
+    driveFolderId,
+  }))}`;
+}
+
+function parseDriveConfigQrPayload(payload) {
+  const raw = String(payload || "").trim();
+  if (!raw.startsWith(DRIVE_CONFIG_QR_PREFIX)) {
+    throw new Error("同期設定QRではありません。PC版で発行したスマホ連携QRを読み取ってください。");
+  }
+  let config;
+  try {
+    config = JSON.parse(decodeURIComponent(raw.slice(DRIVE_CONFIG_QR_PREFIX.length)));
+  } catch {
+    throw new Error("同期設定QRの内容を読み取れませんでした。");
+  }
+  const clientId = String(config?.clientId || "").trim();
+  const driveFileId = extractDriveFileId(config?.driveFileId);
+  const driveFolderId = extractDriveFolderId(config?.driveFolderId);
+  if (config?.type !== "listing-assist-drive-config" || Number(config?.version) !== 1) {
+    throw new Error("対応していない同期設定QRです。");
+  }
+  if (!clientId.endsWith(".apps.googleusercontent.com") || !isValidDriveResourceId(driveFileId)) {
+    throw new Error("同期設定QRに必要な情報がありません。");
+  }
+  if (driveFolderId && !isValidDriveResourceId(driveFolderId)) {
+    throw new Error("同期設定QRの保存先フォルダIDが不正です。");
+  }
+  return { clientId, driveFileId, driveFolderId };
+}
+
+function showDriveConfigQr() {
+  handleSyncSettingsInput();
+  if (typeof globalThis.qrcode !== "function") {
+    setStatus("QR生成ライブラリを読み込めませんでした。通信状態を確認してください。", true);
+    return;
+  }
+  try {
+    const payload = buildDriveConfigQrPayload();
+    const qr = globalThis.qrcode(0, "M");
+    qr.addData(payload);
+    qr.make();
+    elements.driveConfigQrPreview.innerHTML = qr.createSvgTag({ scalable: true, margin: 2 });
+    elements.driveConfigQrSummary.textContent = [
+      "Google OAuthクライアントID: 設定済み",
+      `DriveファイルID: ${extractDriveFileId(state.syncSettings.driveFileId)}`,
+      `保存先フォルダID: ${extractDriveFolderId(state.syncSettings.driveFolderId) || "未設定"}`,
+      "Googleへのログイン認証はスマホ側で別途必要です。",
+    ].join("\n");
+    elements.driveConfigQrModal?.showModal();
+  } catch (error) {
+    setStatus(error.message, true);
+    window.alert(error.message);
+  }
+}
+
+function handleDriveConfigQrModalBackdropClick(event) {
+  const rect = elements.driveConfigQrModal.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
+    elements.driveConfigQrModal.close();
+  }
+}
+
 function setShelfQrValidationMessage(message, isError = false) {
   if (!elements.shelfQrValidationMessage) return;
   elements.shelfQrValidationMessage.textContent = message;
@@ -1577,8 +1881,8 @@ function handleShelfQrModalBackdropClick(event) {
   }
 }
 
-async function openQrScanner({ target, source, productName }) {
-  if (!target) return;
+async function openQrScanner({ target = null, source, productName }) {
+  if (!target && source !== "drive-config") return;
   state.qrScannerTarget = target;
   state.qrScannerSource = source;
   elements.qrScannerProductName.textContent = `登録対象: ${productName || "商品"}`;
@@ -1591,7 +1895,9 @@ async function openQrScanner({ target, source, productName }) {
 async function startQrCamera() {
   stopQrCamera();
   if (!navigator.mediaDevices?.getUserMedia) {
-    elements.qrScannerStatus.textContent = "このブラウザーではカメラを利用できません。棚番号を手動入力してください。";
+    elements.qrScannerStatus.textContent = state.qrScannerSource === "drive-config"
+      ? "このブラウザーではカメラを利用できません。PC版で同期設定を手動入力してください。"
+      : "このブラウザーではカメラを利用できません。棚番号を手動入力してください。";
     return;
   }
 
@@ -1606,7 +1912,9 @@ async function startQrCamera() {
     await elements.qrScannerVideo.play();
     state.qrScannerActive = true;
     state.qrBarcodeDetector = createQrBarcodeDetector();
-    elements.qrScannerStatus.textContent = "棚のQRコードを枠内に映してください。";
+    elements.qrScannerStatus.textContent = state.qrScannerSource === "drive-config"
+      ? "PC版で表示したスマホ連携QRを枠内に映してください。"
+      : "棚のQRコードを枠内に映してください。";
     scanQrVideoFrame();
   } catch (error) {
     console.warn("[Listing Assist] Camera start failed", error);
@@ -1645,7 +1953,7 @@ async function scanQrVideoFrame() {
     console.warn("[Listing Assist] QR frame decode failed", error);
   }
 
-  if (rawValue && applyScannedShelfQr(rawValue)) return;
+  if (rawValue && applyScannedQr(rawValue)) return;
   if (state.qrScannerActive) {
     state.qrScannerFrameRequest = requestAnimationFrame(scanQrVideoFrame);
   }
@@ -1668,7 +1976,10 @@ function decodeQrFromVideoWithJsQr(video) {
   return String(result?.data || "");
 }
 
-function applyScannedShelfQr(rawValue) {
+function applyScannedQr(rawValue) {
+  if (state.qrScannerSource === "drive-config") {
+    return applyScannedDriveConfigQr(rawValue);
+  }
   let shelfCode = "";
   try {
     shelfCode = parseShelfQrPayload(rawValue);
@@ -1691,6 +2002,45 @@ function applyScannedShelfQr(rawValue) {
   if (elements.qrScannerModal.open) elements.qrScannerModal.close();
   target.focus();
   setStatus(`棚番号 ${shelfCode} をQRから入力しました。内容を確認して保存してください。`);
+  return true;
+}
+
+function applyScannedDriveConfigQr(rawValue) {
+  let config;
+  try {
+    config = parseDriveConfigQrPayload(rawValue);
+  } catch (error) {
+    elements.qrScannerStatus.textContent = error.message;
+    return false;
+  }
+
+  const replacingExisting = Boolean(
+    state.syncSettings.driveClientId || state.syncSettings.driveFileId || state.syncSettings.driveFolderId,
+  );
+  const message = [
+    replacingExisting ? "現在のDrive同期設定を上書きします。" : "このDrive同期設定を保存します。",
+    `クライアントID: ${config.clientId}`,
+    `DriveファイルID: ${config.driveFileId}`,
+    `保存先フォルダID: ${config.driveFolderId || "未設定"}`,
+    "読み取っただけではDrive読込・保存は実行しません。",
+  ].join("\n");
+  if (!window.confirm(message)) {
+    elements.qrScannerStatus.textContent = "同期設定の保存をキャンセルしました。別のQRを読み取れます。";
+    return false;
+  }
+
+  state.syncSettings.driveClientId = config.clientId;
+  state.syncSettings.driveFileId = config.driveFileId;
+  state.syncSettings.driveFolderId = config.driveFolderId;
+  if (elements.driveClientId) elements.driveClientId.value = config.clientId;
+  if (elements.driveFileId) elements.driveFileId.value = config.driveFileId;
+  if (elements.driveFolderId) elements.driveFolderId.value = config.driveFolderId;
+  writeJsonStorage(SYNC_SETTINGS_STORAGE_KEY, state.syncSettings);
+  renderDriveSyncInfo();
+  renderMobileDriveSyncInfo();
+  stopQrCamera();
+  if (elements.qrScannerModal.open) elements.qrScannerModal.close();
+  setStatus("同期設定QRを保存しました。Drive読込を押すとGoogle認証が始まります。");
   return true;
 }
 
@@ -4007,7 +4357,10 @@ function updateSyncHistoryAfterImport(payload, counts, fileName = "") {
 }
 
 function renderDriveSyncInfo() {
-  if (!elements.driveSyncInfo) return;
+  if (!elements.driveSyncInfo) {
+    renderMobileDriveSyncInfo();
+    return;
+  }
 
   const deviceName = state.syncSettings.deviceName || getDefaultDeviceName();
   const exportLabel = state.syncHistory.lastExportAt
@@ -4031,6 +4384,7 @@ function renderDriveSyncInfo() {
     `運用メモ: 初回は Google Cloud で OAuthクライアントID を作り、現在のオリジン（${location.origin}）を承認済みのJavaScript生成元に追加してください。`,
     "補足: DriveファイルID欄と保存先フォルダ欄は、IDそのものでもDriveのURL貼り付けでも使えます。",
   ].join("\n");
+  renderMobileDriveSyncInfo();
 }
 
 function showDriveSyncGuide() {
@@ -4065,6 +4419,10 @@ function extractDriveFileId(value) {
 
 function extractDriveFolderId(value) {
   return extractDriveFileId(value);
+}
+
+function isValidDriveResourceId(value) {
+  return /^[-\w]{25,}$/.test(String(value || "").trim());
 }
 
 function getDefaultDeviceName() {
@@ -4398,6 +4756,23 @@ function createImagePlaceholder() {
 function setStatus(message, isError = false) {
   elements.statusMessage.textContent = message;
   elements.statusMessage.style.color = isError ? "#9d2f2f" : "var(--success)";
+  if (elements.mobileStatusMessage) {
+    if (state.mobileStatusTimer) {
+      clearTimeout(state.mobileStatusTimer);
+      state.mobileStatusTimer = 0;
+    }
+    elements.mobileStatusMessage.textContent = message;
+    elements.mobileStatusMessage.classList.toggle("is-error", Boolean(isError));
+    if (message) {
+      state.mobileStatusTimer = window.setTimeout(() => {
+        if (elements.mobileStatusMessage.textContent === message) {
+          elements.mobileStatusMessage.textContent = "";
+          elements.mobileStatusMessage.classList.remove("is-error");
+        }
+        state.mobileStatusTimer = 0;
+      }, isError ? 8000 : 4500);
+    }
+  }
 }
 
 function showCsvImportModal({ title, body, meta = "", tone = "progress" }) {

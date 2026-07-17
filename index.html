@@ -3,11 +3,99 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="listing-assist-environment" content="test">
+  <link rel="icon" href="data:,">
   <title>商品データ管理・出品支援 MVP</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app-shell">
+  <div id="mobileApp" class="mobile-app is-hidden">
+    <header class="mobile-header">
+      <div>
+        <p class="eyebrow">Listing Assist Mobile</p>
+        <h1>スマホ在庫管理</h1>
+      </div>
+      <button id="switchToDesktopButton" class="mobile-text-button" type="button">PC版</button>
+    </header>
+
+    <main class="mobile-main">
+      <section class="mobile-panel" data-mobile-panel="search">
+        <div class="mobile-section-heading">
+          <div>
+            <p class="mobile-kicker">商品を探す</p>
+            <h2>商品検索</h2>
+          </div>
+          <span id="mobileProductCount" class="mobile-count-badge">0件</span>
+        </div>
+        <label class="mobile-search-field">
+          <span>商品名・SKU・棚番号</span>
+          <input id="mobileSearchInput" type="search" placeholder="例：A-001 / EKW-001">
+        </label>
+        <div id="mobileProductList" class="mobile-product-list" aria-live="polite"></div>
+      </section>
+
+      <section class="mobile-panel is-hidden" data-mobile-panel="quick">
+        <div class="mobile-section-heading">
+          <div>
+            <p class="mobile-kicker">メルカリ出品後</p>
+            <h2>かんたん在庫入力</h2>
+          </div>
+        </div>
+        <p class="mobile-help">出品URLと最低限の商品情報を登録します。保存時に商品マスター・出品データ・在庫管理へ反映します。</p>
+        <button id="mobileOpenQuickInventoryButton" class="mobile-primary-action" type="button">新しい商品を仮登録</button>
+        <div id="mobileLooseInventorySummary" class="mobile-info-card"></div>
+      </section>
+
+      <section class="mobile-panel is-hidden" data-mobile-panel="shelf">
+        <div class="mobile-section-heading">
+          <div>
+            <p class="mobile-kicker">商品を選んでQR読取</p>
+            <h2>棚登録</h2>
+          </div>
+        </div>
+        <p class="mobile-help">商品を選ぶとカメラが起動します。QRを読んだあと、棚番号を確認して保存してください。</p>
+        <label class="mobile-search-field">
+          <span>登録する商品を検索</span>
+          <input id="mobileShelfSearchInput" type="search" placeholder="商品名・SKU・現在の棚番号">
+        </label>
+        <div id="mobileShelfProductList" class="mobile-product-list" aria-live="polite"></div>
+      </section>
+
+      <section class="mobile-panel is-hidden" data-mobile-panel="sync">
+        <div class="mobile-section-heading">
+          <div>
+            <p class="mobile-kicker">端末間で共有</p>
+            <h2>Drive同期</h2>
+          </div>
+        </div>
+        <div class="mobile-sync-actions">
+          <button id="mobileImportDriveButton" class="mobile-primary-action" type="button">Driveから読込</button>
+          <button id="mobileExportDriveButton" class="mobile-secondary-action" type="button">Driveへ保存</button>
+        </div>
+        <div id="mobileDriveSyncInfo" class="mobile-info-card" aria-live="polite"></div>
+        <div class="mobile-sync-actions">
+          <button id="mobileScanDriveConfigButton" class="mobile-secondary-action" type="button">同期設定QRを読み取る</button>
+          <button id="mobileShowDriveConfigQrButton" class="mobile-text-action" type="button">この端末の設定QRを表示</button>
+          <button id="mobileSeedButton" class="mobile-text-action is-hidden" type="button">テスト用サンプルを追加</button>
+        </div>
+        <p class="mobile-warning">別端末で更新した可能性がある場合は、保存より先にDriveから読み込んでください。</p>
+      </section>
+    </main>
+
+    <p id="mobileStatusMessage" class="mobile-status" aria-live="polite"></p>
+
+    <nav class="mobile-bottom-nav" aria-label="スマホ版メニュー">
+      <button class="mobile-nav-button is-active" type="button" data-mobile-tab="search"><span>検索</span></button>
+      <button class="mobile-nav-button" type="button" data-mobile-tab="quick"><span>仮登録</span></button>
+      <button class="mobile-nav-button" type="button" data-mobile-tab="shelf"><span>棚登録</span></button>
+      <button class="mobile-nav-button" type="button" data-mobile-tab="sync"><span>同期</span></button>
+    </nav>
+  </div>
+
+  <div id="desktopApp" class="app-shell">
+    <div class="desktop-mode-bar">
+      <button id="switchToMobileButton" class="ghost-button" type="button">スマホ版を表示</button>
+    </div>
     <header class="hero">
       <div>
         <p class="eyebrow">Inventory-first Serverless MVP</p>
@@ -104,6 +192,7 @@
           </div>
           <div class="drive-sync-actions">
             <button id="showDriveSyncGuideButton" class="ghost-button" type="button">Drive同期の使い方</button>
+            <button id="showDriveConfigQrButton" class="ghost-button" type="button">スマホ連携QRを表示</button>
           </div>
           <div id="driveSyncInfo" class="drive-sync-info" aria-live="polite"></div>
         </div>
@@ -620,6 +709,21 @@
         <button id="retryQrScannerButton" class="secondary-button" type="button">カメラを再起動</button>
         <button id="cancelQrScannerButton" class="ghost-button" type="button">手動入力に戻る</button>
       </div>
+    </div>
+  </dialog>
+
+  <dialog id="driveConfigQrModal" class="qr-scanner-modal drive-config-qr-modal">
+    <div class="qr-scanner-shell drive-config-qr-shell">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">Drive Setup QR</p>
+          <h2>スマホ連携QR</h2>
+        </div>
+        <button id="closeDriveConfigQrButton" class="ghost-button" type="button">閉じる</button>
+      </div>
+      <p class="form-note">別端末の「同期設定QRを読み取る」で読み取ってください。アクセストークンやパスワードは含まれません。</p>
+      <div id="driveConfigQrPreview" class="drive-config-qr-preview"></div>
+      <div id="driveConfigQrSummary" class="drive-config-qr-summary" aria-live="polite"></div>
     </div>
   </dialog>
 

@@ -11,6 +11,18 @@ GitHub Pages: <https://humandoll26.github.io/listing-assist/>
 - Google Drive同期を試すときは、最初にテスト用バックアップを使用してください。
 - QR棚登録のカメラ確認にはHTTPSのPages URLを使用してください。
 
+## スマホ版の主な操作
+
+- 商品名・SKU・棚番号による商品検索
+- メルカリ出品URLを使った、商品・出品・在庫のかんたん登録
+- 商品選択後の棚QR読取と手動棚番号入力
+- Google Driveからの読込・保存
+- PC版で作成した同期設定QRの読取
+
+初回表示は画面幅と端末情報から判定します。画面上部のボタンでPC版／スマホ版を手動切替でき、選択は端末内に保存されます。
+
+同期設定QRにはOAuthクライアントID、DriveファイルID、任意の保存先フォルダIDだけを含めます。アクセストークンやパスワードは含めません。
+
 ## 公開対象
 
 Pagesでは `index.html`、`styles.css`、`app.js`、`bootstrap.js`、`js/data/` を配信します。
