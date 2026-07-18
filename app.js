@@ -209,6 +209,7 @@ const elements = {
   imagePreviewStorage: document.getElementById("imagePreviewStorage"),
   closeImagePreviewButton: document.getElementById("closeImagePreviewButton"),
   csvImportModal: document.getElementById("csvImportModal"),
+  csvImportEyebrow: document.getElementById("csvImportEyebrow"),
   csvImportTitle: document.getElementById("csvImportTitle"),
   csvImportBody: document.getElementById("csvImportBody"),
   csvImportMeta: document.getElementById("csvImportMeta"),
@@ -351,8 +352,8 @@ function bindEvents() {
   elements.mobileSearchInput?.addEventListener("input", renderMobileProductLists);
   elements.mobileShelfMissingFilter?.addEventListener("change", renderMobileProductLists);
   elements.mobileOpenQuickInventoryButton?.addEventListener("click", () => openLooseInventoryModal("smartphone"));
-  elements.mobileImportDriveButton?.addEventListener("click", wrapAsyncEvent(importJsonFromDrive));
-  elements.mobileExportDriveButton?.addEventListener("click", wrapAsyncEvent(uploadJsonToDrive));
+  elements.mobileImportDriveButton?.addEventListener("click", wrapDriveAsyncEvent(importJsonFromDrive, "load"));
+  elements.mobileExportDriveButton?.addEventListener("click", wrapDriveAsyncEvent(uploadJsonToDrive, "save"));
   elements.mobileScanDriveConfigButton?.addEventListener("click", wrapAsyncEvent(() => openQrScanner({
     source: "drive-config",
     productName: "Drive同期設定",
@@ -401,8 +402,8 @@ function bindEvents() {
   });
   elements.photos.addEventListener("change", wrapAsyncEvent(handlePhotoInputChange));
   elements.exportJsonButton.addEventListener("click", wrapAsyncEvent(exportJson));
-  elements.exportDriveJsonButton?.addEventListener("click", wrapAsyncEvent(uploadJsonToDrive));
-  elements.importDriveJsonButton?.addEventListener("click", wrapAsyncEvent(importJsonFromDrive));
+  elements.exportDriveJsonButton?.addEventListener("click", wrapDriveAsyncEvent(uploadJsonToDrive, "save"));
+  elements.importDriveJsonButton?.addEventListener("click", wrapDriveAsyncEvent(importJsonFromDrive, "load"));
   elements.exportCsvButton.addEventListener("click", wrapAsyncEvent(exportCsv));
   elements.selectImportCsvButton?.addEventListener("click", () => {
     if (state.importInProgress) return;
@@ -529,6 +530,27 @@ function wrapAsyncEvent(handler) {
     Promise.resolve(handler(event)).catch((error) => {
       console.error("[Listing Assist] Event handler failed", error);
       setStatus(`処理に失敗しました: ${error.message}`, true);
+    });
+  };
+}
+
+function wrapDriveAsyncEvent(handler, operation) {
+  return (event) => {
+    Promise.resolve(handler(event)).catch((error) => {
+      console.error("[Listing Assist] Drive operation failed", error);
+      const actionLabel = operation === "save" ? "Driveへの保存" : "Driveからの読み込み";
+      const message = `${actionLabel}に失敗しました: ${error.message}`;
+      setStatus(message, true);
+      showDriveOperationModal({
+        title: `${actionLabel}に失敗しました`,
+        body: error.message || "Google Driveとの通信中にエラーが発生しました。",
+        meta: [
+          `処理: ${actionLabel}`,
+          `ファイルID: ${extractDriveFileId(state.syncSettings.driveFileId) || "未設定"}`,
+          `エラー詳細: ${error.message || "不明なエラー"}`,
+        ].join("\n"),
+        tone: "error",
+      });
     });
   };
 }
@@ -3280,6 +3302,15 @@ async function uploadJsonToDrive() {
     const shouldContinue = await confirmBeforeDriveOverwrite(currentDriveMetadata, currentFileId, identity);
     if (!shouldContinue) {
       setStatus("Drive保存をキャンセルしました");
+      showDriveOperationModal({
+        title: "Driveへの保存をキャンセルしました",
+        body: "Drive上のファイルは変更されていません。",
+        meta: [
+          `対象ファイル: ${currentDriveMetadata.name || "名称未取得"}`,
+          `ファイルID: ${currentFileId}`,
+        ].join("\n"),
+        tone: "neutral",
+      });
       return;
     }
   }
@@ -3335,6 +3366,19 @@ async function uploadJsonToDrive() {
   const counts = payload.meta?.counts || {};
   const createdOrUpdated = currentFileId ? "更新" : "新規保存";
   setStatus(`Driveへ${createdOrUpdated}しました（商品 ${counts.products || 0} / 詳細 ${counts.listings || 0} / 在庫 ${counts.inventories || 0} / ファイルID ${state.syncSettings.driveFileId}）`);
+  showDriveOperationModal({
+    title: "Driveへの保存が完了しました",
+    body: `Driveへ${createdOrUpdated}しました。`,
+    meta: [
+      `対象ファイル: ${result.name || fileName}`,
+      `商品: ${counts.products || 0}件`,
+      `詳細: ${counts.listings || 0}件`,
+      `在庫: ${counts.inventories || 0}件`,
+      `ファイルID: ${state.syncSettings.driveFileId}`,
+      `保存日時: ${formatDateTime(payload.exportedAt)}`,
+    ].join("\n"),
+    tone: "success",
+  });
   renderDriveSyncInfo();
 }
 
@@ -3370,11 +3414,36 @@ async function importJsonFromDrive() {
     fallbackExportedAt: metadata.modifiedTime || "",
   });
   if (!importResult?.imported) {
+    showDriveOperationModal({
+      title: "Driveからの読み込みをキャンセルしました",
+      body: "端末内のデータは変更されていません。",
+      meta: [
+        `対象ファイル: ${metadata.name || "名称未取得"}`,
+        `ファイルID: ${fileId}`,
+      ].join("\n"),
+      tone: "neutral",
+    });
     return;
   }
   state.syncHistory.lastKnownDriveFileId = fileId;
   state.syncHistory.lastKnownDriveModifiedAt = String(metadata.modifiedTime || "");
   writeJsonStorage(SYNC_HISTORY_STORAGE_KEY, state.syncHistory);
+  const counts = importResult.counts || {};
+  const sourceDeviceName = String(importResult.backup?.meta?.deviceName || "").trim();
+  showDriveOperationModal({
+    title: "Driveからの読み込みが完了しました",
+    body: "Drive上のバックアップを端末へ反映しました。",
+    meta: [
+      `対象ファイル: ${metadata.name || "名称未取得"}`,
+      `商品: ${counts.products || 0}件`,
+      `詳細: ${counts.listings || 0}件`,
+      `在庫: ${counts.inventories || 0}件`,
+      sourceDeviceName ? `保存元端末: ${sourceDeviceName}` : "保存元端末: 未設定",
+      `バックアップ日時: ${formatDateTime(importResult.backup?.exportedAt || metadata.modifiedTime)}`,
+      `ファイルID: ${fileId}`,
+    ].join("\n"),
+    tone: "success",
+  });
   renderDriveSyncInfo();
 }
 
@@ -4899,9 +4968,26 @@ function setStatus(message, isError = false) {
   }
 }
 
-function showCsvImportModal({ title, body, meta = "", tone = "progress" }) {
+function showCsvImportModal(options) {
+  showOperationStatusModal({
+    eyebrow: "CSV読み込み",
+    ...options,
+  });
+}
+
+function showDriveOperationModal(options) {
+  showOperationStatusModal({
+    eyebrow: "Google Drive",
+    ...options,
+  });
+}
+
+function showOperationStatusModal({ eyebrow = "処理結果", title, body, meta = "", tone = "progress" }) {
   if (!elements.csvImportModal) return;
 
+  if (elements.csvImportEyebrow) {
+    elements.csvImportEyebrow.textContent = eyebrow;
+  }
   elements.csvImportTitle.textContent = title;
   elements.csvImportBody.textContent = body;
   elements.csvImportMeta.textContent = meta;
