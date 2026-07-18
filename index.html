@@ -109,18 +109,16 @@
     </header>
 
     <section class="panel drive-workspace" aria-labelledby="driveWorkspaceTitle">
-      <h2 id="driveWorkspaceTitle">Google Drive同期</h2>
-      <div class="drive-sync-primary-actions">
-        <button id="importDriveJsonButton" class="primary-button" type="button">Driveから読み込む</button>
-        <button id="exportDriveJsonButton" class="secondary-button" type="button">Driveへ保存する</button>
+      <div class="drive-workspace-main">
+        <h2 id="driveWorkspaceTitle">Google Drive</h2>
+        <div class="drive-sync-primary-actions">
+          <button id="importDriveJsonButton" class="primary-button" type="button">Driveから読み込む</button>
+          <button id="exportDriveJsonButton" class="secondary-button" type="button">Driveへ保存する</button>
+        </div>
       </div>
-    </section>
-
-    <section class="panel panel-tools">
-      <div class="panel-heading">
-        <h2>その他の機能</h2>
-        <p class="panel-heading-note">必要なときだけ開いて使用します</p>
-      </div>
+      <details class="workspace-options">
+        <summary>初期設定・その他の機能</summary>
+        <div class="workspace-options-content">
       <details class="optional-tools">
         <summary>ファイルの書き出し・読み込み（JSON / CSV）</summary>
         <p class="section-helper">
@@ -213,6 +211,8 @@
       <div class="test-tools-row">
         <button id="seedButton" class="ghost-button" type="button">テスト用サンプルを追加</button>
       </div>
+        </div>
+      </details>
       <p id="statusMessage" class="status-message" aria-live="polite"></p>
     </section>
 

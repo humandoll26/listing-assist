@@ -262,13 +262,16 @@ button:hover {
 }
 
 .drive-workspace {
+  margin-bottom: 12px;
+  border-color: rgba(169, 93, 38, 0.34);
+  background: linear-gradient(135deg, rgba(255, 250, 243, 0.98), rgba(247, 234, 218, 0.94));
+}
+
+.drive-workspace-main {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  margin-bottom: 12px;
-  border-color: rgba(169, 93, 38, 0.34);
-  background: linear-gradient(135deg, rgba(255, 250, 243, 0.98), rgba(247, 234, 218, 0.94));
 }
 
 .drive-workspace h2 {
@@ -284,6 +287,30 @@ button:hover {
 .drive-sync-primary-actions button {
   min-width: 160px;
   min-height: 42px;
+}
+
+.workspace-options {
+  margin-top: 8px;
+  border-top: 1px solid rgba(169, 93, 38, 0.18);
+}
+
+.workspace-options > summary {
+  width: fit-content;
+  padding-top: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.workspace-options > summary:hover {
+  color: var(--accent-dark);
+}
+
+.workspace-options-content {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
 }
 
 .drive-sync-fields {
@@ -897,14 +924,14 @@ button:hover {
   font-size: 0.9rem;
 }
 
+.status-message:empty {
+  display: none;
+}
+
 .loose-inventory-summary {
   margin-bottom: 0;
   color: var(--muted);
   line-height: 1.45;
-}
-
-.panel-tools {
-  margin-bottom: 12px;
 }
 
 .empty-state {
@@ -1903,6 +1930,10 @@ body[data-view-mode="mobile"] .loose-inventory-panel {
   }
 
   .drive-workspace {
+    padding: 12px 14px;
+  }
+
+  .drive-workspace-main {
     align-items: stretch;
     flex-direction: column;
   }
