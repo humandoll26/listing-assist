@@ -4372,18 +4372,25 @@ function renderDriveSyncInfo() {
 
   const deviceName = state.syncSettings.deviceName || getDefaultDeviceName();
   const exportLabel = state.syncHistory.lastExportAt
-    ? formatDateTime(state.syncHistory.lastExportAt)
+    ? `${formatDateTime(state.syncHistory.lastExportAt)} / ${describeSyncMode(state.syncHistory.lastExportMode)} / ${state.syncHistory.lastExportFileName || "ファイル名不明"}`
     : "まだ保存していません";
   const importLabel = state.syncHistory.lastImportAt
-    ? formatDateTime(state.syncHistory.lastImportAt)
+    ? `${formatDateTime(state.syncHistory.lastImportAt)} / 保存元 ${state.syncHistory.lastImportedDeviceName || "不明"}${state.syncHistory.lastImportedFileName ? ` / ${state.syncHistory.lastImportedFileName}` : ""}`
     : "まだ読み込んでいません";
   const settingsReady = Boolean(state.syncSettings.driveClientId && extractDriveFileId(state.syncSettings.driveFileId));
+  const countLabel = state.syncHistory.lastImportedCounts
+    ? `直近の読み込み件数: 商品 ${state.syncHistory.lastImportedCounts.products || 0} / 詳細 ${state.syncHistory.lastImportedCounts.listings || 0} / 在庫 ${state.syncHistory.lastImportedCounts.inventories || 0}`
+    : "直近の読み込み件数: なし";
 
   elements.driveSyncInfo.textContent = [
     `同期設定: ${settingsReady ? "設定済み" : "未設定"}`,
+    `OAuthクライアントID: ${state.syncSettings.driveClientId ? "設定済み" : "未設定"}`,
+    `DriveファイルID: ${extractDriveFileId(state.syncSettings.driveFileId) || "未設定"}`,
+    `保存先フォルダID: ${extractDriveFolderId(state.syncSettings.driveFolderId) || "未設定"}`,
+    `端末名: ${deviceName}`,
     `最終読み込み: ${importLabel}`,
     `最終保存: ${exportLabel}`,
-    `端末名: ${deviceName}`,
+    countLabel,
   ].join("\n");
   renderMobileDriveSyncInfo();
 }

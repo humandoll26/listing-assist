@@ -109,16 +109,11 @@
     </header>
 
     <section class="panel drive-workspace" aria-labelledby="driveWorkspaceTitle">
-      <div class="drive-workspace-copy">
-        <p class="eyebrow">Daily Sync</p>
-        <h2 id="driveWorkspaceTitle">Google Drive同期</h2>
-        <p>別端末で更新した可能性がある場合は、保存する前にDriveから読み込んでください。</p>
-      </div>
+      <h2 id="driveWorkspaceTitle">Google Drive同期</h2>
       <div class="drive-sync-primary-actions">
         <button id="importDriveJsonButton" class="primary-button" type="button">Driveから読み込む</button>
         <button id="exportDriveJsonButton" class="secondary-button" type="button">Driveへ保存する</button>
       </div>
-      <div id="driveSyncInfo" class="drive-sync-info" aria-live="polite"></div>
     </section>
 
     <section class="panel panel-tools">
@@ -197,6 +192,10 @@
           <div class="drive-sync-actions">
             <button id="showDriveSyncGuideButton" class="ghost-button" type="button">Drive同期の使い方</button>
             <button id="showDriveConfigQrButton" class="ghost-button" type="button">スマホ連携QRを表示</button>
+          </div>
+          <div>
+            <h3 class="drive-sync-details-title">現在の同期情報</h3>
+            <div id="driveSyncInfo" class="drive-sync-info" aria-live="polite"></div>
           </div>
           <p class="section-helper">
             初回はGoogle Cloudで現在のオリジンを「承認済みのJavaScript生成元」に登録してください。ファイルID・フォルダID欄にはGoogle Driveの共有URLも入力できます。

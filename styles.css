@@ -262,25 +262,17 @@ button:hover {
 }
 
 .drive-workspace {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto minmax(250px, 0.8fr);
-  gap: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
   align-items: center;
   margin-bottom: 12px;
   border-color: rgba(169, 93, 38, 0.34);
   background: linear-gradient(135deg, rgba(255, 250, 243, 0.98), rgba(247, 234, 218, 0.94));
 }
 
-.drive-workspace-copy h2,
-.drive-workspace-copy p {
+.drive-workspace h2 {
   margin: 0;
-}
-
-.drive-workspace-copy > p:last-child {
-  margin-top: 6px;
-  color: var(--muted);
-  font-size: 0.9rem;
-  line-height: 1.5;
 }
 
 .drive-sync-primary-actions {
@@ -313,6 +305,11 @@ button:hover {
   border-radius: var(--radius-sm);
   line-height: 1.6;
   white-space: pre-line;
+}
+
+.drive-sync-details-title {
+  margin: 0 0 7px;
+  font-size: 0.96rem;
 }
 
 .section-helper {
@@ -1906,7 +1903,8 @@ body[data-view-mode="mobile"] .loose-inventory-panel {
   }
 
   .drive-workspace {
-    grid-template-columns: 1fr;
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
