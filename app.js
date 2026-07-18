@@ -1128,7 +1128,7 @@ function renderReviewSummary() {
   [
     { key: "review", label: "要確認（まとめ）", tone: "danger" },
     { key: "detail_missing", label: "商品詳細なし", tone: "muted" },
-    { key: "needs_link", label: "要紐付け", tone: "warning" },
+    { key: "needs_link", label: "出品情報を確認", tone: "warning" },
     { key: "image_missing", label: "画像未取得", tone: "warning" },
     { key: "storage_missing", label: "棚未設定", tone: "muted" },
     { key: "product_missing", label: "商品情報未入力", tone: "warning" },
@@ -2281,7 +2281,7 @@ function getProductLinkStatus(product) {
   if (linkedListing) {
     return {
       mode: "linked",
-      label: "紐付け済み",
+      label: "出品情報あり",
       listing: linkedListing,
     };
   }
@@ -2291,7 +2291,7 @@ function getProductLinkStatus(product) {
   if (importedListing) {
     return {
       mode: "unlinked",
-      label: "要紐付け",
+      label: "出品情報を確認",
       listing: importedListing,
     };
   }
@@ -2312,7 +2312,7 @@ function getProductReviewFlags(product, linkStatus = null, inventory = null) {
     flags.push({ key: "detail_missing", label: "商品詳細なし", tone: "muted" });
   }
   if (resolvedLinkStatus.mode === "unlinked") {
-    flags.push({ key: "needs_link", label: "要紐付け", tone: "warning" });
+    flags.push({ key: "needs_link", label: "出品情報を確認", tone: "warning" });
   }
   if (!hasPreviewImage(product)) {
     flags.push({ key: "image_missing", label: "画像未取得", tone: "warning" });
@@ -2340,7 +2340,7 @@ function getReviewFilterLabel(filterKey = state.reviewFilter) {
     case "detail_missing":
       return "商品詳細なし";
     case "needs_link":
-      return "要紐付け";
+      return "出品情報を確認";
     case "image_missing":
       return "画像未取得";
     case "storage_missing":
@@ -2430,7 +2430,7 @@ function syncListingDetailStatus(linkStatus, productId) {
   elements.saveListingDetailButton.hidden = false;
 
   if (linkStatus.mode === "linked") {
-    elements.listingDetailStatusText.textContent = "この商品マスターには、商品詳細データが紐付いています。";
+    elements.listingDetailStatusText.textContent = "この商品には、保存済みの出品情報があります。";
     elements.listingDetailLinkButton.hidden = true;
     elements.listingDetailLinkButton.onclick = null;
     elements.saveListingDetailButton.textContent = "詳細データを保存";
@@ -2438,7 +2438,7 @@ function syncListingDetailStatus(linkStatus, productId) {
   }
 
   if (linkStatus.mode === "unlinked") {
-    elements.listingDetailStatusText.textContent = "商品詳細データはありますが、この商品マスターにはまだ紐付いていません。内容を確認してから紐付けできます。";
+    elements.listingDetailStatusText.textContent = "取り込んだ出品情報があります。内容がこの商品で合っているか確認してください。";
     elements.listingDetailLinkButton.hidden = false;
     elements.saveListingDetailButton.textContent = "詳細データを保存";
     elements.listingDetailLinkButton.onclick = wrapAsyncAction(async () => {
@@ -2967,24 +2967,24 @@ async function saveListingDetail({ linkAfterSave = false } = {}) {
   state.listingDetailFetchedDetail = null;
 
   await loadProducts();
-  setStatus(linkAfterSave ? "商品詳細を保存してこの商品に紐付けました。" : "商品詳細を保存しました。");
+  setStatus(linkAfterSave ? "この商品の出品情報として保存しました。" : "商品詳細を保存しました。");
   return listing;
 }
 
 async function handleConfirmLink(productId) {
   const product = state.products.find((item) => item.id === productId) || null;
   if (!product) {
-    setStatus("紐付け対象の商品が見つかりません", true);
+    setStatus("保存先の商品が見つかりません", true);
     return;
   }
 
   const linkStatus = getProductLinkStatus(product);
   if (linkStatus.mode !== "unlinked" || !linkStatus.listing) {
-    setStatus("この商品は紐付け対象ではありません", true);
+    setStatus("この商品には確認待ちの出品情報がありません", true);
     return;
   }
 
-  const ok = window.confirm(`${product.title || "この商品"} に商品詳細を紐付けますか？`);
+  const ok = window.confirm(`${product.title || "この商品"} の出品情報として保存しますか？`);
   if (!ok) return;
   elements.listingDetailProductId.value = product.id;
   elements.listingDetailListingId.value = linkStatus.listing.lid;
@@ -3000,19 +3000,19 @@ async function handleConfirmVisibleLinks() {
   const allUnresolvedProducts = state.products.filter((product) => getProductLinkStatus(product).mode === "unlinked");
 
   if (allMissingProducts.length === 0 && allUnresolvedProducts.length === 0) {
-    setStatus("商品詳細なし・要紐付けの行はありません");
+    setStatus("商品詳細なし・出品情報の確認待ちの行はありません");
     return;
   }
 
   if (visibleMissingProducts.length === 0 && visibleUnresolvedProducts.length === 0) {
     setStatus(
-      `全体では 商品詳細なし ${allMissingProducts.length} 件 / 要紐付け ${allUnresolvedProducts.length} 件あります。検索条件のため現在の一覧には表示されていません。`,
+      `全体では 商品詳細なし ${allMissingProducts.length} 件 / 出品情報を確認 ${allUnresolvedProducts.length} 件あります。検索条件のため現在の一覧には表示されていません。`,
     );
     return;
   }
 
   setStatus(
-    `現在表示中: 商品詳細なし ${visibleMissingProducts.length} 件 / 要紐付け ${visibleUnresolvedProducts.length} 件です。要紐付け行は「この商品に紐付ける」で結び付けできます。`,
+    `現在表示中: 商品詳細なし ${visibleMissingProducts.length} 件 / 出品情報を確認 ${visibleUnresolvedProducts.length} 件です。該当行の出品情報を開き、内容を確認して保存してください。`,
   );
 }
 
@@ -3684,7 +3684,7 @@ async function seedSampleData() {
   const unlinkedProduct = {
     id: unlinkedProductId,
     sku: "EKW-UNLINK-001",
-    title: "要紐付け確認用 コットンブラウス",
+    title: "出品情報確認用 コットンブラウス",
     brand: "サンプルブランド",
     category: "ファッション > レディース > トップス > シャツ・ブラウス",
     condition: "",
@@ -3694,7 +3694,7 @@ async function seedSampleData() {
     stock: 1,
     shipping: "",
     shippingSize: "",
-    tags: ["要紐付け", "テスト"],
+    tags: ["出品情報確認", "テスト"],
     description: "",
     memo: "商品マスターだけ先にある状態のテスト用",
     photos: [],
@@ -3729,7 +3729,7 @@ async function seedSampleData() {
     listingStatus: "出品中",
     shipping: "ゆうパケットポスト",
     shippingSize: "",
-    tags: ["要紐付け", "テスト"],
+    tags: ["出品情報確認", "テスト"],
     updatedAt: now,
   };
 
@@ -3743,7 +3743,7 @@ async function seedSampleData() {
   });
   await inventoryRepository.saveMany(looseInventories);
   await loadProducts();
-  setStatus("サンプルデータを追加しました。要紐付けデータと未紐付け在庫も追加しています。");
+  setStatus("サンプルデータを追加しました。出品情報の確認待ちデータと未登録の在庫も追加しています。");
 }
 
 function getSelectedProduct() {
