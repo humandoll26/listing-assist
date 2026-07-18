@@ -57,6 +57,7 @@ const state = {
   inventories: [],
   selectedId: null,
   checkedIds: new Set(),
+  checkedLooseInventoryIds: new Set(),
   modalImages: [],
   productFetchedDetail: null,
   listingDetailFetchedDetail: null,
@@ -574,6 +575,12 @@ async function loadProducts() {
     state.checkedIds = new Set(
       state.products.filter((product) => state.checkedIds.has(product.id)).map((product) => product.id),
     );
+    state.checkedLooseInventoryIds = new Set(
+      state.inventories
+        .filter((inventory) => !String(inventory?.pid || "").trim())
+        .filter((inventory) => state.checkedLooseInventoryIds.has(inventory.iid))
+        .map((inventory) => inventory.iid),
+    );
     if (!state.selectedId && state.products[0]) {
       state.selectedId = state.products[0].id;
     }
@@ -982,7 +989,7 @@ function renderLooseInventoryRows() {
     row.className = "inventory-row inventory-row-loose";
 
     row.innerHTML = `
-      <td class="cell-check"></td>
+      <td class="cell-check"><input class="row-select-checkbox" type="checkbox"></td>
       <td class="cell-photo">-</td>
       <td class="cell-sku">-</td>
       <td class="cell-title"></td>
@@ -992,6 +999,16 @@ function renderLooseInventoryRows() {
       <td class="cell-updated"></td>
       <td class="cell-actions"></td>
     `;
+
+    const rowCheckbox = row.querySelector(".row-select-checkbox");
+    rowCheckbox.checked = state.checkedLooseInventoryIds.has(inventory.iid);
+    rowCheckbox.setAttribute("aria-label", `${inventory.title || inventory.shelfCode || "商品情報未入力"} を選択`);
+    rowCheckbox.addEventListener("click", (event) => event.stopPropagation());
+    rowCheckbox.addEventListener("change", () => {
+      toggleCheckedLooseInventory(inventory.iid, rowCheckbox.checked);
+      row.classList.toggle("is-checked", rowCheckbox.checked);
+    });
+    row.classList.toggle("is-checked", state.checkedLooseInventoryIds.has(inventory.iid));
 
     row.querySelector(".cell-title").textContent = inventory.title || "商品情報未入力";
     row.querySelector(".cell-storage").textContent = inventory.shelfCode || "未設定";
@@ -1041,7 +1058,7 @@ function renderLooseInventoryRows() {
   }
 
   elements.productList.append(fragment);
-  updateBulkSelectionControls([]);
+  updateBulkSelectionControls(looseInventories);
 }
 
 function renderStats() {
@@ -2433,15 +2450,27 @@ function toggleCheckedProduct(productId, checked) {
   updateBulkSelectionControls(getFilteredProducts());
 }
 
+function toggleCheckedLooseInventory(inventoryId, checked) {
+  if (checked) {
+    state.checkedLooseInventoryIds.add(inventoryId);
+  } else {
+    state.checkedLooseInventoryIds.delete(inventoryId);
+  }
+  updateBulkSelectionControls(getFilteredLooseInventories());
+}
+
 function updateBulkSelectionControls(visibleProducts = getFilteredProducts()) {
   if (state.reviewFilter === "product_missing") {
+    const visibleIds = visibleProducts.map((inventory) => inventory.iid);
+    const checkedVisibleCount = visibleIds.filter((id) => state.checkedLooseInventoryIds.has(id)).length;
+    const totalCheckedCount = state.checkedLooseInventoryIds.size;
+
     if (elements.selectAllCheckbox) {
-      elements.selectAllCheckbox.checked = false;
-      elements.selectAllCheckbox.indeterminate = false;
+      elements.selectAllCheckbox.checked = visibleIds.length > 0 && checkedVisibleCount === visibleIds.length;
+      elements.selectAllCheckbox.indeterminate = checkedVisibleCount > 0 && checkedVisibleCount < visibleIds.length;
     }
     if (elements.bulkDeleteButton) {
-      const totalCheckedCount = state.checkedIds.size;
-      elements.bulkDeleteButton.disabled = true;
+      elements.bulkDeleteButton.disabled = totalCheckedCount === 0;
       elements.bulkDeleteButton.textContent = totalCheckedCount > 0 ? `選択削除 (${totalCheckedCount})` : "選択削除";
     }
     return;
@@ -2464,8 +2493,17 @@ function updateBulkSelectionControls(visibleProducts = getFilteredProducts()) {
 
 function handleSelectAllChange(event) {
   if (state.reviewFilter === "product_missing") {
-    event.target.checked = false;
-    event.target.indeterminate = false;
+    const checked = Boolean(event.target.checked);
+    const visibleInventories = getFilteredLooseInventories();
+    for (const inventory of visibleInventories) {
+      if (checked) {
+        state.checkedLooseInventoryIds.add(inventory.iid);
+      } else {
+        state.checkedLooseInventoryIds.delete(inventory.iid);
+      }
+    }
+    updateBulkSelectionControls(visibleInventories);
+    renderProducts();
     return;
   }
 
@@ -2567,7 +2605,22 @@ async function deleteProductGraph(products) {
 
 async function handleBulkDelete() {
   if (state.reviewFilter === "product_missing") {
-    setStatus("商品情報未入力の一覧では選択削除は使えません。各行の削除を使ってください", true);
+    const ids = [...state.checkedLooseInventoryIds];
+
+    if (ids.length === 0) {
+      setStatus("削除する商品情報未入力データを選択してください", true);
+      return;
+    }
+
+    const ok = window.confirm(`選択した ${ids.length} 件の商品情報未入力データを削除しますか？`);
+    if (!ok) return;
+
+    await deleteLooseInventories(ids);
+    if (elements.selectAllCheckbox) {
+      elements.selectAllCheckbox.checked = false;
+      elements.selectAllCheckbox.indeterminate = false;
+    }
+    setStatus(`${ids.length} 件の商品情報未入力データを削除しました`);
     return;
   }
 
@@ -2674,12 +2727,38 @@ async function deleteLooseInventory(inventoryId) {
   if (!ok) return;
 
   await inventoryRepository.delete(inventoryId);
+  state.checkedLooseInventoryIds.delete(inventoryId);
   if (elements.looseInventoryId.value === inventoryId) {
     populateLooseInventoryForm();
   }
   await loadProducts();
   renderLooseInventoryModalState();
   setStatus("未紐付け在庫を削除しました");
+}
+
+async function deleteLooseInventories(inventoryIds) {
+  const ids = [...new Set(inventoryIds)].filter(Boolean);
+  if (ids.length === 0) return;
+
+  const looseInventoryIds = new Set(
+    state.inventories
+      .filter((inventory) => !String(inventory?.pid || "").trim())
+      .map((inventory) => inventory.iid),
+  );
+  const deletableIds = ids.filter((id) => looseInventoryIds.has(id));
+  if (deletableIds.length !== ids.length) {
+    throw new Error("削除対象に商品マスターへ紐付いた在庫が含まれているため処理を中止しました");
+  }
+
+  await database.runTransaction(["inventories"], "readwrite", (stores) => {
+    deletableIds.forEach((id) => stores.inventories.delete(id));
+  });
+  deletableIds.forEach((id) => state.checkedLooseInventoryIds.delete(id));
+  if (deletableIds.includes(elements.looseInventoryId.value)) {
+    populateLooseInventoryForm();
+  }
+  await loadProducts();
+  renderLooseInventoryModalState();
 }
 
 async function promoteLooseInventoryToProduct(inventoryId, { editAfter = false } = {}) {
