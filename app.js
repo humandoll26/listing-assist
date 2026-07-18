@@ -69,6 +69,7 @@ const state = {
   qrScannerFrameRequest: 0,
   qrScannerActive: false,
   qrBarcodeDetector: null,
+  desktopStatusTimer: 0,
   mobileStatusTimer: 0,
   viewMode: "desktop",
   mobileTab: "search",
@@ -824,7 +825,7 @@ function renderMobileQuickSummary() {
   if (!elements.mobileLooseInventorySummary) return;
   const looseCount = getLooseInventories().length;
   elements.mobileLooseInventorySummary.textContent = looseCount > 0
-    ? `自動登録できず確認待ちの在庫が ${looseCount} 件あります。PC版または入力画面から修正できます。`
+    ? `自動登録できず確認待ちの在庫が ${looseCount} 件あります。PC版から内容を修正できます。`
     : "未処理の仮登録データはありません。";
 }
 
@@ -1056,6 +1057,7 @@ function renderStats() {
   elements.productCount.textContent = String(totalProducts);
   elements.stockCount.textContent = String(stockCount);
   elements.locationCount.textContent = String(locationCount);
+  document.body.classList.toggle("has-products", totalProducts > 0);
 }
 
 function renderReviewSummary() {
@@ -1081,8 +1083,12 @@ function renderReviewSummary() {
   elements.reviewSummary.innerHTML = "";
 
   const fragment = document.createDocumentFragment();
+  const label = document.createElement("span");
+  label.className = "review-summary-label";
+  label.textContent = "絞り込み";
+  fragment.append(label);
   [
-    { key: "review", label: "要確認", tone: "danger" },
+    { key: "review", label: "要確認（まとめ）", tone: "danger" },
     { key: "detail_missing", label: "商品詳細なし", tone: "muted" },
     { key: "needs_link", label: "要紐付け", tone: "warning" },
     { key: "image_missing", label: "画像未取得", tone: "warning" },
@@ -1096,12 +1102,23 @@ function renderReviewSummary() {
     const isActive = state.reviewFilter === item.key;
     button.setAttribute("aria-pressed", String(isActive));
     button.classList.toggle("is-active", isActive);
+    button.classList.toggle("is-empty", counts[item.key] === 0);
+    button.disabled = counts[item.key] === 0 && !isActive;
     button.textContent = `${item.label} ${counts[item.key] || 0}`;
     button.addEventListener("click", () => {
       setReviewFilter(item.key);
     });
     fragment.append(button);
   });
+
+  if (state.reviewFilter !== "all") {
+    const clearButton = document.createElement("button");
+    clearButton.type = "button";
+    clearButton.className = "review-filter-clear";
+    clearButton.textContent = "絞り込み解除";
+    clearButton.addEventListener("click", () => setReviewFilter("all"));
+    fragment.append(clearButton);
+  }
 
   elements.reviewSummary.append(fragment);
 
@@ -1173,6 +1190,8 @@ function populateForm(product) {
     elements.shippingSize.value = "";
     elements.photos.value = "";
     elements.modalTitle.textContent = "新規登録";
+    elements.duplicateButton.classList.add("is-hidden");
+    elements.resetFormButton.classList.add("is-hidden");
     state.modalImages = [];
     state.productFetchedDetail = null;
     syncShippingSizeField("");
@@ -1181,6 +1200,8 @@ function populateForm(product) {
   }
 
   elements.modalTitle.textContent = "商品を編集";
+  elements.duplicateButton.classList.remove("is-hidden");
+  elements.resetFormButton.classList.remove("is-hidden");
   elements.productId.value = product.id;
   elements.sku.value = product.sku;
   elements.title.value = product.title;
@@ -1370,7 +1391,7 @@ function openInventoryModal(productId) {
 
   const inventory = getPrimaryInventory(product.id);
   state.inventoryInputDevice = "pc";
-  elements.inventoryModalTitle.textContent = "在庫管理を編集";
+  elements.inventoryModalTitle.textContent = "棚登録・在庫編集";
   elements.inventoryProductId.value = product.id;
   elements.inventoryProductName.value = product.title || product.sku || "商品";
   elements.inventoryShelfCode.value = inventory?.shelfCode || product.storage || "";
@@ -1397,6 +1418,7 @@ function populateLooseInventoryForm(inventory = null, defaultDevice = "pc") {
   elements.looseInventoryStock.value = String(inventory?.stock ?? 1);
   elements.looseInventoryInputDevice.value = inventory?.inputDevice || defaultDevice;
   elements.looseInventoryLinkMemo.value = inventory?.linkMemo || "";
+  renderLooseInventorySummary();
 }
 
 function getLooseInventories() {
@@ -1413,11 +1435,11 @@ function renderLooseInventoryModalState() {
 
 function renderLooseInventorySummary() {
   if (!elements.looseInventorySummary) return;
-  const count = getLooseInventories().length;
-  elements.looseInventorySummary.textContent =
-    count > 0
-      ? `自動商品登録に失敗した在庫が ${count} 件あります。内容を直して再試行できます。`
-      : "スマホ在庫入力を保存すると、自動で商品マスターと在庫データを作成します。";
+  const isEditing = Boolean(elements.looseInventoryId?.value);
+  elements.looseInventorySummary.textContent = isEditing
+    ? "確認待ちデータを修正しています。保存後に自動登録を再試行できます。"
+    : "販売ページURLと商品タイトル、棚番号を入力して仮登録します。";
+  elements.resetLooseInventoryButton?.classList.toggle("is-hidden", !isEditing);
 }
 
 function renderLooseInventoryList() {
@@ -1476,6 +1498,7 @@ function renderLooseInventoryList() {
     editButton.textContent = "編集";
     editButton.addEventListener("click", () => {
       populateLooseInventoryForm(inventory);
+      renderLooseInventorySummary();
       elements.looseInventoryTitle?.focus();
     });
 
@@ -2306,10 +2329,12 @@ function setReviewFilter(filterKey) {
   state.reviewFilter = nextFilter;
 
   if (nextFilter === "all") {
-    setStatus("要確認の絞り込みを解除しました");
+    setStatus("絞り込みを解除しました");
   } else {
     const label = getReviewFilterLabel(nextFilter);
-    const count = state.products.filter((product) => matchesReviewFilter(product, nextFilter)).length;
+    const count = nextFilter === "product_missing"
+      ? getLooseInventories().length
+      : state.products.filter((product) => matchesReviewFilter(product, nextFilter)).length;
     setStatus(`${label} の商品 ${count} 件だけを表示しています`);
   }
 
@@ -4762,8 +4787,21 @@ function createImagePlaceholder() {
 }
 
 function setStatus(message, isError = false) {
+  if (state.desktopStatusTimer) {
+    clearTimeout(state.desktopStatusTimer);
+    state.desktopStatusTimer = 0;
+  }
   elements.statusMessage.textContent = message;
-  elements.statusMessage.style.color = isError ? "#9d2f2f" : "var(--success)";
+  elements.statusMessage.classList.toggle("is-error", Boolean(isError));
+  if (message) {
+    state.desktopStatusTimer = window.setTimeout(() => {
+      if (elements.statusMessage.textContent === message) {
+        elements.statusMessage.textContent = "";
+        elements.statusMessage.classList.remove("is-error");
+      }
+      state.desktopStatusTimer = 0;
+    }, isError ? 8000 : 4500);
+  }
   if (elements.mobileStatusMessage) {
     if (state.mobileStatusTimer) {
       clearTimeout(state.mobileStatusTimer);

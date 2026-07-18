@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="listing-assist-environment" content="test">
   <link rel="icon" href="data:,">
-  <title>商品データ管理・出品支援 MVP</title>
+  <title>商品データ管理・出品支援ツール</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="mobileApp" class="mobile-app is-hidden">
     <header class="mobile-header">
       <div>
-        <p class="eyebrow">Listing Assist Mobile</p>
+        <p class="eyebrow">スマホ版</p>
         <h1>スマホ在庫管理</h1>
       </div>
       <button id="switchToDesktopButton" class="mobile-text-button" type="button">PC版</button>
@@ -86,7 +86,7 @@
     </div>
     <header class="hero">
       <div>
-        <p class="eyebrow">Inventory-first Serverless MVP</p>
+        <p class="eyebrow">在庫・出品管理</p>
         <h1>商品データ管理・出品支援ツール</h1>
         <p class="hero-copy">
           在庫の保管場所をすぐ見つけられる一覧台帳です。あわせて、メルカリやヤフオク向けの説明文づくりと出品補助に使える情報をまとめて管理できます。
@@ -213,8 +213,8 @@
       </div>
         </div>
       </details>
-      <p id="statusMessage" class="status-message" aria-live="polite"></p>
     </section>
+    <p id="statusMessage" class="status-message" aria-live="polite"></p>
 
     <main class="layout">
       <section class="panel panel-list">
@@ -289,7 +289,7 @@
     <form id="productForm" class="product-form" method="dialog">
       <div class="modal-heading">
         <div>
-          <p class="eyebrow">Product Database</p>
+          <p class="eyebrow">商品情報</p>
           <h2 id="modalTitle">新規登録</h2>
         </div>
         <button id="closeModalButton" class="ghost-button" type="button">閉じる</button>
@@ -301,7 +301,7 @@
         <label class="wide">
           <span>画像</span>
           <input id="photos" name="photos" type="file" accept="image/*" multiple>
-          <small>画像を選ぶと下にプレビューが表示されます。MVPでは先頭画像を一覧サムネイルに使用します。</small>
+          <small>画像を選ぶと下にプレビューが表示されます。先頭画像を一覧サムネイルに使用します。</small>
         </label>
         <div class="wide modal-photo-preview-block">
           <div id="modalPhotoPreview" class="modal-photo-preview"></div>
@@ -420,8 +420,8 @@
     <form id="inventoryForm" class="product-form" method="dialog">
       <div class="modal-heading">
         <div>
-          <p class="eyebrow">Inventory Record</p>
-          <h2 id="inventoryModalTitle">在庫管理</h2>
+          <p class="eyebrow">棚・在庫</p>
+          <h2 id="inventoryModalTitle">棚登録・在庫編集</h2>
         </div>
         <button id="closeInventoryModalButton" class="ghost-button" type="button">閉じる</button>
       </div>
@@ -451,7 +451,7 @@
       </div>
 
       <div class="form-actions">
-        <button class="primary-button" type="submit">保存する</button>
+        <button class="primary-button" type="submit">棚・在庫を保存する</button>
       </div>
     </form>
   </dialog>
@@ -460,7 +460,7 @@
     <form id="looseInventoryForm" class="product-form" method="dialog">
       <div class="modal-heading">
         <div>
-          <p class="eyebrow">Loose Inventory</p>
+          <p class="eyebrow">仮登録</p>
           <h2>かんたん在庫入力</h2>
         </div>
         <button id="closeLooseInventoryModalButton" class="ghost-button" type="button">閉じる</button>
@@ -492,7 +492,7 @@
           <span>在庫数</span>
           <input id="looseInventoryStock" name="looseInventoryStock" type="number" min="0" step="1" value="1">
         </label>
-        <label>
+        <label class="loose-input-device-field">
           <span>入力元</span>
           <select id="looseInventoryInputDevice" name="looseInventoryInputDevice">
             <option value="pc">PC</option>
@@ -525,7 +525,7 @@
     <form id="listingDetailForm" class="product-form listing-detail-shell" method="dialog">
       <div class="modal-heading">
         <div>
-          <p class="eyebrow">Listing Detail</p>
+          <p class="eyebrow">出品データ</p>
           <h2 id="listingDetailModalTitle">商品詳細データ確認・編集</h2>
         </div>
         <button id="closeListingDetailModalButton" class="ghost-button" type="button">閉じる</button>
@@ -614,7 +614,7 @@
     <div class="csv-import-shell">
       <div class="modal-heading">
         <div>
-          <p class="eyebrow">CSV Import Status</p>
+          <p class="eyebrow">CSV読み込み</p>
           <h2 id="csvImportTitle">CSV読み込み状況</h2>
         </div>
         <button id="closeCsvImportModalButton" class="ghost-button" type="button">閉じる</button>
@@ -628,7 +628,7 @@
     <div class="csv-import-shell backup-confirm-shell" data-tone="progress">
       <div class="modal-heading">
         <div>
-          <p class="eyebrow">Backup Import Check</p>
+          <p class="eyebrow">バックアップ読み込み</p>
           <h2 id="backupImportConfirmTitle">読み込み前の確認</h2>
         </div>
         <button id="closeBackupImportConfirmButton" class="ghost-button" type="button">キャンセル</button>
@@ -646,7 +646,7 @@
     <div class="shelf-qr-shell">
       <div class="modal-heading">
         <div>
-          <p class="eyebrow">Shelf QR Labels</p>
+          <p class="eyebrow">棚QRラベル</p>
           <h2>棚QRコード発行</h2>
         </div>
         <button id="closeShelfQrModalButton" class="ghost-button" type="button">閉じる</button>
@@ -710,7 +710,7 @@
     <div class="qr-scanner-shell">
       <div class="modal-heading">
         <div>
-          <p class="eyebrow">Shelf QR Scanner</p>
+          <p class="eyebrow">棚QR読み取り</p>
           <h2>棚QRを読み取る</h2>
         </div>
         <button id="closeQrScannerButton" class="ghost-button" type="button">キャンセル</button>
@@ -733,7 +733,7 @@
     <div class="qr-scanner-shell drive-config-qr-shell">
       <div class="modal-heading">
         <div>
-          <p class="eyebrow">Drive Setup QR</p>
+          <p class="eyebrow">Drive同期設定</p>
           <h2>スマホ連携QR</h2>
         </div>
         <button id="closeDriveConfigQrButton" class="ghost-button" type="button">閉じる</button>
