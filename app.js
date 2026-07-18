@@ -787,6 +787,22 @@ function getMobileProductShelfCode(product) {
   return String(getPrimaryInventory(product.id)?.shelfCode || product.storage || "").trim();
 }
 
+function getProductPlatforms(product) {
+  const platforms = new Set();
+  const addPlatform = (value) => {
+    const platform = normalizePlatform(value);
+    if (platform === "メルカリ" || platform === "ヤフオク") platforms.add(platform);
+  };
+
+  addPlatform(product.platform);
+  state.listings.forEach((listing) => {
+    if (listing?.pid === product.id) addPlatform(listing.platform);
+  });
+  addPlatform(getImportedListingForProduct(product)?.platform);
+
+  return ["メルカリ", "ヤフオク"].filter((platform) => platforms.has(platform));
+}
+
 function renderMobileProductCards(container, products) {
   if (!container) return;
   container.innerHTML = "";
@@ -825,6 +841,19 @@ function renderMobileProductCards(container, products) {
     title.className = "mobile-product-title";
     title.textContent = product.title || "商品タイトル未設定";
     content.append(sku, title);
+
+    const platforms = getProductPlatforms(product);
+    const platformList = document.createElement("div");
+    platformList.className = "mobile-platform-list";
+    const displayedPlatforms = platforms.length > 0 ? platforms : ["出品先未設定"];
+    displayedPlatforms.forEach((platform) => {
+      const badge = document.createElement("span");
+      const platformClass = platform === "メルカリ" ? "mercari" : platform === "ヤフオク" ? "yahoo" : "unset";
+      badge.className = `mobile-platform-badge is-${platformClass}`;
+      badge.textContent = platform;
+      platformList.append(badge);
+    });
+    content.append(platformList);
     if (shelfCode) {
       const shelf = document.createElement("span");
       shelf.className = "mobile-shelf-badge";
@@ -1103,6 +1132,8 @@ function renderReviewSummary() {
 
   const counts = {
     review: 0,
+    platform_mercari: 0,
+    platform_yahoo: 0,
     detail_missing: 0,
     needs_link: 0,
     image_missing: 0,
@@ -1111,6 +1142,9 @@ function renderReviewSummary() {
   };
 
   state.products.forEach((product) => {
+    const platforms = getProductPlatforms(product);
+    if (platforms.includes("メルカリ")) counts.platform_mercari += 1;
+    if (platforms.includes("ヤフオク")) counts.platform_yahoo += 1;
     const flags = getProductReviewFlags(product);
     if (flags.some((flag) => flag.key !== "storage_missing")) counts.review += 1;
     flags.forEach((flag) => {
@@ -1126,6 +1160,8 @@ function renderReviewSummary() {
   label.textContent = "絞り込み";
   fragment.append(label);
   [
+    { key: "platform_mercari", label: "メルカリ", tone: "mercari" },
+    { key: "platform_yahoo", label: "ヤフオク", tone: "yahoo" },
     { key: "review", label: "要確認（まとめ）", tone: "danger" },
     { key: "detail_missing", label: "商品詳細なし", tone: "muted" },
     { key: "needs_link", label: "出品情報を確認", tone: "warning" },
@@ -2329,12 +2365,18 @@ function hasPriorityReviewFlags(product) {
 }
 
 function matchesReviewFilter(product, filterKey) {
+  if (filterKey === "platform_mercari") return getProductPlatforms(product).includes("メルカリ");
+  if (filterKey === "platform_yahoo") return getProductPlatforms(product).includes("ヤフオク");
   if (filterKey === "review") return hasPriorityReviewFlags(product);
   return getProductReviewFlags(product).some((flag) => flag.key === filterKey);
 }
 
 function getReviewFilterLabel(filterKey = state.reviewFilter) {
   switch (filterKey) {
+    case "platform_mercari":
+      return "メルカリ";
+    case "platform_yahoo":
+      return "ヤフオク";
     case "review":
       return "要確認";
     case "detail_missing":

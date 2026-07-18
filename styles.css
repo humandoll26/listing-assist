@@ -611,6 +611,18 @@ button:hover {
   box-shadow: 0 8px 18px rgba(91, 61, 38, 0.08);
 }
 
+.review-chip.is-mercari {
+  border-color: #e8b3aa;
+  background: #fff1ee;
+  color: #a83b31;
+}
+
+.review-chip.is-yahoo {
+  border-color: #e1c08c;
+  background: #fff6e7;
+  color: #8a5612;
+}
+
 .review-chip.is-active {
   border-color: #9f2f2f;
   background: #c94d4d;
@@ -1644,6 +1656,39 @@ body[data-view-mode="mobile"] .product-form textarea {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.mobile-platform-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mobile-platform-badge {
+  padding: 3px 8px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.mobile-platform-badge.is-mercari {
+  border-color: #e8b3aa;
+  background: #fff1ee;
+  color: #a83b31;
+}
+
+.mobile-platform-badge.is-yahoo {
+  border-color: #e1c08c;
+  background: #fff6e7;
+  color: #8a5612;
+}
+
+.mobile-platform-badge.is-unset {
+  border-color: #d9c8b3;
+  background: #f4efe9;
+  color: #6f5a42;
 }
 
 .mobile-shelf-badge {
