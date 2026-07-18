@@ -129,7 +129,7 @@
           <section class="file-tool-card" aria-labelledby="csvToolTitle">
             <div>
               <h3 id="csvToolTitle">CSV商品一覧</h3>
-              <p>一覧を書き出すか、メルカリ・ヤフオクのCSVを取り込みます。</p>
+              <p>メルカリ・ヤフオクのCSVを取り込むか、現在の商品一覧を書き出します。</p>
             </div>
             <label class="csv-platform-field">
               <span>読み込むCSVの種類</span>
@@ -140,12 +140,11 @@
               </select>
             </label>
             <div class="file-tool-actions">
-              <button id="exportCsvButton" class="secondary-button" type="button">CSVを書き出す</button>
-              <button id="selectImportCsvButton" class="ghost-button" type="button">CSVファイルを選ぶ</button>
+              <button id="selectImportCsvButton" class="primary-button" type="button">CSVを選んで読み込む</button>
               <input id="importCsvInput" type="file" accept=".csv,text/csv" hidden>
-              <button id="runImportCsvButton" class="primary-button" type="button" disabled>CSVを読み込む</button>
+              <button id="exportCsvButton" class="secondary-button" type="button">CSVを書き出す</button>
             </div>
-            <p id="selectedCsvFileName" class="selected-file-name">ファイル未選択</p>
+            <p id="selectedCsvFileName" class="selected-file-name">ファイルを選択すると、そのまま読み込みを開始します。</p>
           </section>
           <section class="file-tool-card" aria-labelledby="jsonToolTitle">
             <div>

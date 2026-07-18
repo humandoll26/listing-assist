@@ -256,7 +256,6 @@ const elements = {
   reviewSummary: document.getElementById("reviewSummary"),
   looseInventoryNotice: document.getElementById("looseInventoryNotice"),
   importCsvInput: document.getElementById("importCsvInput"),
-  runImportCsvButton: document.getElementById("runImportCsvButton"),
   csvPlatformHint: document.getElementById("csvPlatformHint"),
   importJsonInput: document.getElementById("importJsonInput"),
   driveClientId: document.getElementById("driveClientId"),
@@ -303,7 +302,7 @@ async function initializeApp() {
   initializeViewMode();
   configureEnvironmentFeatures();
   syncShippingSizeField(elements.shipping.value);
-  updateImportCsvButtonState();
+  updateImportCsvControlState();
   renderDriveSyncInfo();
   await database.open();
   await loadProducts();
@@ -406,12 +405,12 @@ function bindEvents() {
   elements.importDriveJsonButton?.addEventListener("click", wrapAsyncEvent(importJsonFromDrive));
   elements.exportCsvButton.addEventListener("click", wrapAsyncEvent(exportCsv));
   elements.selectImportCsvButton?.addEventListener("click", () => {
+    if (state.importInProgress) return;
     elements.importCsvInput.value = "";
-    updateImportCsvButtonState();
+    updateImportCsvControlState();
     elements.importCsvInput.click();
   });
-  elements.importCsvInput.addEventListener("change", handleImportCsvSelection);
-  elements.runImportCsvButton?.addEventListener("click", wrapAsyncEvent(importCsv));
+  elements.importCsvInput.addEventListener("change", wrapAsyncEvent(handleImportCsvSelection));
   elements.selectImportJsonButton?.addEventListener("click", () => {
     elements.importJsonInput.value = "";
     elements.importJsonInput.click();
@@ -3100,29 +3099,29 @@ async function exportCsv() {
   setStatus("CSVを保存しました");
 }
 
-function handleImportCsvSelection(event) {
+async function handleImportCsvSelection(event) {
   const [file] = Array.from(event.target.files || []);
 
   if (!file) {
-    setStatus("CSVファイルが未選択です", true);
+    updateImportCsvControlState();
     return;
   }
 
-  setStatus(`CSVファイルを選択しました: ${file.name}`);
-  updateImportCsvButtonState();
+  await importCsv();
 }
 
-function updateImportCsvButtonState() {
-  if (!elements.runImportCsvButton) return;
-
+function updateImportCsvControlState() {
   const selectedFile = elements.importCsvInput?.files?.[0] || null;
-  const hasFile = Boolean(selectedFile);
-  elements.runImportCsvButton.disabled = state.importInProgress || !hasFile;
-  elements.runImportCsvButton.textContent = state.importInProgress
+  if (elements.selectImportCsvButton) {
+    elements.selectImportCsvButton.disabled = state.importInProgress;
+    elements.selectImportCsvButton.textContent = state.importInProgress
     ? "CSVを読み込み中..."
-    : "CSVを読み込む";
+    : "CSVを選んで読み込む";
+  }
   if (elements.selectedCsvFileName) {
-    elements.selectedCsvFileName.textContent = hasFile ? `選択中: ${selectedFile.name}` : "ファイル未選択";
+    elements.selectedCsvFileName.textContent = selectedFile
+      ? `${state.importInProgress ? "読み込み中" : "選択中"}: ${selectedFile.name}`
+      : "ファイルを選択すると、そのまま読み込みを開始します。";
   }
 }
 
@@ -3141,7 +3140,7 @@ async function importCsv() {
 
   try {
     state.importInProgress = true;
-    updateImportCsvButtonState();
+    updateImportCsvControlState();
     console.info("[Listing Assist] CSV import start", {
       fileName: file.name,
       platformHint: elements.csvPlatformHint?.value || "",
@@ -3165,7 +3164,7 @@ async function importCsv() {
     });
 
     elements.importCsvInput.value = "";
-    updateImportCsvButtonState();
+    updateImportCsvControlState();
     await loadProducts();
 
     const warningSuffix = result.warnings.length > 0 ? ` / 警告 ${result.warnings.length}件` : "";
@@ -3201,7 +3200,7 @@ async function importCsv() {
     });
   } finally {
     state.importInProgress = false;
-    updateImportCsvButtonState();
+    updateImportCsvControlState();
   }
 }
 
