@@ -718,9 +718,14 @@ button:hover {
 }
 
 .row-actions {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.row-action-line {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
   align-items: center;
 }
 
