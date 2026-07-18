@@ -120,22 +120,11 @@
         <summary>初期設定・その他の機能</summary>
         <div class="workspace-options-content">
       <details class="optional-tools">
-        <summary>ファイルの書き出し・読み込み（JSON / CSV）</summary>
+        <summary>ファイルの書き出し・読み込み（CSV / JSON）</summary>
         <p class="section-helper">
-          JSONはアプリ全体のバックアップ、CSVは商品一覧の書き出し・読み込みに使用します。
+          通常はCSVを使用します。JSONは全データの復旧や端末移行に備えるバックアップです。
         </p>
         <div class="file-tool-grid">
-          <section class="file-tool-card" aria-labelledby="jsonToolTitle">
-            <div>
-              <h3 id="jsonToolTitle">JSONバックアップ</h3>
-              <p>商品・出品・在庫をまとめて保存、復元します。</p>
-            </div>
-            <div class="file-tool-actions">
-              <button id="exportJsonButton" class="secondary-button" type="button">JSONを書き出す</button>
-              <button id="selectImportJsonButton" class="ghost-button" type="button">JSONを読み込む</button>
-              <input id="importJsonInput" type="file" accept="application/json" hidden>
-            </div>
-          </section>
           <section class="file-tool-card" aria-labelledby="csvToolTitle">
             <div>
               <h3 id="csvToolTitle">CSV商品一覧</h3>
@@ -156,6 +145,17 @@
               <button id="runImportCsvButton" class="primary-button" type="button" disabled>CSVを読み込む</button>
             </div>
             <p id="selectedCsvFileName" class="selected-file-name">ファイル未選択</p>
+          </section>
+          <section class="file-tool-card" aria-labelledby="jsonToolTitle">
+            <div>
+              <h3 id="jsonToolTitle">JSON全体バックアップ（復旧用）</h3>
+              <p>商品・出品・在庫をまとめて保存し、同じ状態へ復元します。</p>
+            </div>
+            <div class="file-tool-actions">
+              <button id="exportJsonButton" class="secondary-button" type="button">JSONを書き出す</button>
+              <button id="selectImportJsonButton" class="ghost-button" type="button">JSONから復元する</button>
+              <input id="importJsonInput" type="file" accept="application/json" hidden>
+            </div>
           </section>
         </div>
       </details>
