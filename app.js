@@ -958,7 +958,17 @@ function renderProducts() {
     thumbImage.src = imageSrc;
     thumbImage.alt = `${product.title || "商品"} の画像`;
     node.querySelector(".cell-sku").textContent = product.sku || "-";
-    node.querySelector(".cell-title").textContent = product.title || "-";
+    const titleCell = node.querySelector(".cell-title");
+    const titleButton = document.createElement("button");
+    titleButton.type = "button";
+    titleButton.className = "product-title-link";
+    titleButton.textContent = product.title || "商品タイトル未設定";
+    titleButton.title = `${product.title || "商品タイトル未設定"}を確認・編集`;
+    titleButton.setAttribute("aria-label", `${product.title || "商品タイトル未設定"}を確認・編集`);
+    titleButton.addEventListener("click", () => {
+      openModalForEdit(product.id);
+    });
+    titleCell.append(titleButton);
     node.querySelector(".cell-storage").textContent = inventory?.shelfCode || product.storage || "未設定";
     node.querySelector(".cell-stock").textContent = String(inventory?.stock ?? product.stock ?? 0);
     renderPlatformCell(node.querySelector(".cell-platform"), product, linkStatus, reviewFlags);

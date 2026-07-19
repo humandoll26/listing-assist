@@ -520,6 +520,32 @@ button:hover {
   font-weight: 700;
 }
 
+.product-title-link {
+  display: block;
+  max-width: 100%;
+  min-height: 0;
+  padding: 2px 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba(130, 75, 28, 0.35);
+  text-underline-offset: 3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.product-title-link:hover,
+.product-title-link:focus-visible {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
 .cell-platform {
   color: var(--accent-strong);
   white-space: normal;
