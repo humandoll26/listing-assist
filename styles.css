@@ -742,6 +742,39 @@ button:hover {
   margin-top: -2px;
 }
 
+.image-fetch-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-bottom: 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f6f0e8;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.image-fetch-status.is-complete {
+  border-color: #a9c9aa;
+  background: #edf7ed;
+  color: #356b38;
+}
+
+.image-fetch-status.is-warning {
+  border-color: #e2bd84;
+  background: #fff5e4;
+  color: #885914;
+}
+
+.image-fetch-status.is-missing {
+  border-color: #dfaaa0;
+  background: #fceeea;
+  color: #973d32;
+}
+
 .modal-photo-preview {
   display: flex;
   flex-wrap: wrap;

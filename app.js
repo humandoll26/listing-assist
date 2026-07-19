@@ -153,6 +153,7 @@ const elements = {
   saveListingDetailButton: document.getElementById("saveListingDetailButton"),
   listingDetailStatusBadge: document.getElementById("listingDetailStatusBadge"),
   listingDetailStatusText: document.getElementById("listingDetailStatusText"),
+  listingDetailImageFetchStatus: document.getElementById("listingDetailImageFetchStatus"),
   listingDetailProductId: document.getElementById("listingDetailProductId"),
   listingDetailListingId: document.getElementById("listingDetailListingId"),
   listingDetailLinkMode: document.getElementById("listingDetailLinkMode"),
@@ -224,6 +225,7 @@ const elements = {
   cancelBackupImportConfirmButton: document.getElementById("cancelBackupImportConfirmButton"),
   acceptBackupImportConfirmButton: document.getElementById("acceptBackupImportConfirmButton"),
   modalPhotoPreview: document.getElementById("modalPhotoPreview"),
+  productImageFetchStatus: document.getElementById("productImageFetchStatus"),
   productId: document.getElementById("productId"),
   sku: document.getElementById("sku"),
   title: document.getElementById("title"),
@@ -1295,6 +1297,7 @@ function populateForm(product) {
     state.productFetchedDetail = null;
     syncShippingSizeField("");
     renderModalPhotoPreview([]);
+    renderImageFetchStatus(elements.productImageFetchStatus, null);
     return;
   }
 
@@ -1323,6 +1326,7 @@ function populateForm(product) {
   syncShippingSizeField(elements.shipping.value);
   state.modalImages = Array.isArray(product.photos) ? [...product.photos] : [];
   renderModalPhotoPreview(state.modalImages, product.title || "商品");
+  renderImageFetchStatus(elements.productImageFetchStatus, product);
 }
 
 function openModalForCreate() {
@@ -1795,6 +1799,7 @@ function applyFetchedDetailToProductForm(detail) {
     state.modalImages = [...new Set([...fetchedImages, ...state.modalImages].filter(Boolean))];
     renderModalPhotoPreview(state.modalImages, elements.title.value.trim() || detail.title || "商品");
   }
+  renderImageFetchStatus(elements.productImageFetchStatus, getSelectedProduct(), detail);
 
   syncShippingSizeField(elements.shipping.value);
 }
@@ -1810,6 +1815,8 @@ function applyFetchedDetailToListingDetailForm(detail) {
     elements.listingDetailPrice.value = String(Number(detail.price || 0));
   }
   if (!elements.listingDetailDescription.value.trim()) elements.listingDetailDescription.value = detail.description || "";
+  const product = state.products.find((item) => item.id === elements.listingDetailProductId.value) || null;
+  renderImageFetchStatus(elements.listingDetailImageFetchStatus, product, detail);
 }
 
 function applyFetchedDetailToLooseInventoryForm(detail) {
@@ -1974,6 +1981,7 @@ function openListingDetailModal(productId) {
   elements.listingDetailCondition.value = listing?.condition || product.condition || "";
   elements.listingDetailPrice.value = String(Number(listing?.price ?? product.price ?? 0) || "");
   elements.listingDetailDescription.value = listing?.description || product.description || "";
+  renderImageFetchStatus(elements.listingDetailImageFetchStatus, product);
   syncListingDetailStatus(linkStatus, product.id);
   elements.listingDetailModal.showModal();
 }
@@ -3373,7 +3381,24 @@ async function saveListingDetail({ linkAfterSave = false } = {}) {
     updatedAt: now,
   };
 
-  await listingRepository.save(listing);
+  const fetchedImages = getFetchedImageUrls(state.listingDetailFetchedDetail);
+  const updatedProduct = state.listingDetailFetchedDetail
+    ? {
+        ...product,
+        photos: [...new Set([...(product.photos || []), ...fetchedImages])],
+        externalData: mergeFetchedDetailIntoExternalData(product.externalData || {}, fetchedDetail, {
+          platform,
+          platformItemId: platformListingId,
+          itemUrl: rawUrl,
+        }),
+        updatedAt: now,
+      }
+    : null;
+
+  await database.runTransaction(["products", "listings"], "readwrite", (stores) => {
+    stores.listings.put(listing);
+    if (updatedProduct) stores.products.put(buildProductMasterRecord(updatedProduct));
+  });
 
   if (elements.listingDetailModal?.open) {
     elements.listingDetailModal.close();
@@ -4563,6 +4588,46 @@ function renderModalPhotoPreview(images, title = "商品") {
   });
 
   elements.modalPhotoPreview.append(fragment);
+}
+
+function renderImageFetchStatus(element, product, pendingDetail = null) {
+  if (!element) return;
+
+  const pendingImages = getFetchedImageUrls(pendingDetail);
+  if (pendingDetail) {
+    element.className = `image-fetch-status ${pendingImages.length > 0 ? "is-complete" : "is-warning"}`;
+    element.textContent = pendingImages.length > 0
+      ? `今回のURL取得: ${pendingImages.length}枚（保存すると取得済みとして記録されます）`
+      : "URLから商品情報は取得できましたが、画像は取得できませんでした";
+    return;
+  }
+
+  const fetchedEntries = Object.values(product?.externalData || {})
+    .filter((entry) => entry && entry.fetchedAt)
+    .sort((left, right) => String(right.fetchedAt).localeCompare(String(left.fetchedAt)));
+  const latestEntry = fetchedEntries[0] || null;
+  if (latestEntry) {
+    const fetchedImages = getFetchedImageUrls(latestEntry);
+    element.className = `image-fetch-status ${fetchedImages.length > 0 ? "is-complete" : "is-warning"}`;
+    element.textContent = fetchedImages.length > 0
+      ? `販売ページ画像取得済み: ${fetchedImages.length}枚（${formatDateTime(latestEntry.fetchedAt)}）`
+      : `販売ページ情報は取得済みですが、画像は取得できていません（${formatDateTime(latestEntry.fetchedAt)}）`;
+    return;
+  }
+
+  const registeredImageCount = Array.isArray(product?.photos) ? product.photos.filter(Boolean).length : 0;
+  element.className = `image-fetch-status ${registeredImageCount > 0 ? "is-unknown" : "is-missing"}`;
+  element.textContent = registeredImageCount > 0
+    ? `URL画像の取得状況は未確認です（登録画像: ${registeredImageCount}枚）`
+    : "販売ページ画像は未取得です";
+}
+
+function getFetchedImageUrls(detail) {
+  if (!detail) return [];
+  return [...new Set([
+    ...(Array.isArray(detail.imageUrls) ? detail.imageUrls : []),
+    detail.imageUrl,
+  ].map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
 function downloadFile(filename, content, mimeType) {

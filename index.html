@@ -304,6 +304,7 @@
           <small>画像を選ぶと下にプレビューが表示されます。先頭画像を一覧サムネイルに使用します。</small>
         </label>
         <div class="wide modal-photo-preview-block">
+          <div id="productImageFetchStatus" class="image-fetch-status is-unknown" aria-live="polite"></div>
           <div id="modalPhotoPreview" class="modal-photo-preview"></div>
         </div>
 
@@ -543,6 +544,7 @@
         <p id="listingDetailStatusText" class="listing-detail-status-text">
           この商品には商品詳細データがまだありません。
         </p>
+        <div id="listingDetailImageFetchStatus" class="image-fetch-status is-unknown" aria-live="polite"></div>
       </div>
 
       <div class="form-grid">
