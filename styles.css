@@ -468,52 +468,37 @@ button:hover {
 
 .inventory-table th:nth-child(3),
 .inventory-table td:nth-child(3) {
-  width: 88px;
+  width: 112px;
 }
 
 .inventory-table th:nth-child(4),
 .inventory-table td:nth-child(4) {
-  width: 188px;
+  width: 270px;
 }
 
 .inventory-table th:nth-child(5),
 .inventory-table td:nth-child(5) {
-  width: 104px;
+  width: 120px;
 }
 
 .inventory-table th:nth-child(6),
 .inventory-table td:nth-child(6) {
-  width: 154px;
+  width: 54px;
 }
 
 .inventory-table th:nth-child(7),
 .inventory-table td:nth-child(7) {
-  width: 92px;
+  width: 190px;
 }
 
 .inventory-table th:nth-child(8),
 .inventory-table td:nth-child(8) {
-  width: 54px;
+  width: 84px;
 }
 
 .inventory-table th:nth-child(9),
 .inventory-table td:nth-child(9) {
-  width: 132px;
-}
-
-.inventory-table th:nth-child(10),
-.inventory-table td:nth-child(10) {
-  width: 82px;
-}
-
-.inventory-table th:nth-child(11),
-.inventory-table td:nth-child(11) {
-  width: 92px;
-}
-
-.inventory-table th:nth-child(12),
-.inventory-table td:nth-child(12) {
-  width: 238px;
+  width: 190px;
 }
 
 .cell-title {
@@ -730,7 +715,6 @@ button:hover {
 }
 
 .cell-actions {
-  width: 238px;
   white-space: nowrap;
 }
 
