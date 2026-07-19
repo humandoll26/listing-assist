@@ -72,6 +72,7 @@ const state = {
   qrBarcodeDetector: null,
   desktopStatusTimer: 0,
   mobileStatusTimer: 0,
+  detailFetchBatch: null,
   viewMode: "desktop",
   mobileTab: "search",
   importInProgress: false,
@@ -276,6 +277,7 @@ const elements = {
   stockCount: document.getElementById("stockCount"),
   locationCount: document.getElementById("locationCount"),
   productCardTemplate: document.getElementById("productCardTemplate"),
+  bulkFetchDetailsButton: document.getElementById("bulkFetchDetailsButton"),
   bulkDeleteButton: document.getElementById("bulkDeleteButton"),
   selectAllCheckbox: document.getElementById("selectAllCheckbox"),
 };
@@ -444,6 +446,7 @@ function bindEvents() {
   elements.backupImportConfirmModal?.addEventListener("click", handleBackupImportConfirmModalBackdropClick);
   elements.backupImportConfirmModal?.addEventListener("close", handleBackupImportConfirmModalClose);
   elements.bulkDeleteButton?.addEventListener("click", wrapAsyncEvent(handleBulkDelete));
+  elements.bulkFetchDetailsButton?.addEventListener("click", wrapAsyncEvent(handleBulkFetchSelectedDetails));
   elements.selectAllCheckbox?.addEventListener("change", handleSelectAllChange);
   elements.closeShelfQrModalButton?.addEventListener("click", () => elements.shelfQrModal.close());
   elements.addManualShelfCodesButton?.addEventListener("click", addManualShelfQrCodes);
@@ -1341,6 +1344,14 @@ function handleProductUrlChange() {
 }
 
 function beginUrlDetailFetch({ context, url }) {
+  if (state.detailFetchBatch?.active) {
+    setStatus("一括取得が完了してから個別取得を実行してください", true);
+    return;
+  }
+  if (pendingUrlDetailFetch) {
+    setStatus("別の商品詳細を取得中です", true);
+    return;
+  }
   const normalizedUrl = String(url || "").trim();
   if (!normalizedUrl) {
     setStatus("先に販売ページURLを入力してください", true);
@@ -1357,6 +1368,7 @@ function beginUrlDetailFetch({ context, url }) {
   pendingUrlDetailFetch = {
     requestId,
     context,
+    mode: "single",
     startedAt: Date.now(),
   };
 
@@ -1385,7 +1397,14 @@ function handleIncomingDetailFetchMessage(event) {
   if (!payload || payload.type !== "listing-assist-detail-result") return;
   if (!pendingUrlDetailFetch || pendingUrlDetailFetch.requestId !== payload.requestId) return;
 
+  const pendingRequest = pendingUrlDetailFetch;
   pendingUrlDetailFetch = null;
+  if (pendingRequest.timeoutId) window.clearTimeout(pendingRequest.timeoutId);
+
+  if (pendingRequest.mode === "batch") {
+    pendingRequest.resolve(payload);
+    return;
+  }
 
   if (!payload.ok) {
     setStatus(`URLからの詳細取得に失敗しました: ${payload.error || "unknown error"}`, true);
@@ -1394,6 +1413,266 @@ function handleIncomingDetailFetchMessage(event) {
 
   applyFetchedDetailToContext(payload.context, payload.detail || {});
   setStatus("URLから商品詳細を取得しました");
+}
+
+async function handleBulkFetchSelectedDetails() {
+  if (state.detailFetchBatch?.active) {
+    setStatus("商品詳細の一括取得はすでに実行中です", true);
+    return;
+  }
+  if (pendingUrlDetailFetch) {
+    setStatus("個別の商品詳細取得が完了してから実行してください", true);
+    return;
+  }
+  if (state.reviewFilter === "product_missing") {
+    setStatus("商品情報未入力データは一括取得の対象外です", true);
+    return;
+  }
+
+  const selectedProducts = state.products.filter((product) => state.checkedIds.has(product.id));
+  if (selectedProducts.length === 0) {
+    setStatus("詳細を取得する商品を選択してください", true);
+    return;
+  }
+
+  const targets = selectedProducts.map((product) => ({
+    product,
+    target: getBatchDetailFetchTarget(product),
+  }));
+  const runnableTargets = targets.filter((item) => item.target);
+  const missingUrlTargets = targets.filter((item) => !item.target);
+  if (runnableTargets.length === 0) {
+    showOperationStatusModal({
+      eyebrow: "商品詳細の一括取得",
+      title: "取得できる商品URLがありません",
+      body: "選択した商品にメルカリまたはヤフオクの商品URLを登録してください。",
+      meta: missingUrlTargets.map((item) => `対象外: ${item.product.sku || item.product.title || item.product.id}`).join("\n"),
+      tone: "error",
+    });
+    return;
+  }
+
+  const confirmationLines = [
+    `選択した ${selectedProducts.length} 件のうち、URLがある ${runnableTargets.length} 件から商品詳細を取得します。`,
+    "販売ページを1件ずつ開くため、処理中は専用タブを閉じないでください。",
+    "既存の入力値は残し、空欄の項目と写真を補完します。",
+  ];
+  if (missingUrlTargets.length > 0) {
+    confirmationLines.push(`URLがない ${missingUrlTargets.length} 件は処理せず、結果に表示します。`);
+  }
+  if (!window.confirm(confirmationLines.join("\n"))) return;
+
+  const workerWindow = window.open("about:blank", "listing-assist-detail-worker");
+  if (!workerWindow) {
+    setStatus("ポップアップがブロックされたため一括取得を開始できませんでした", true);
+    return;
+  }
+
+  const batch = {
+    active: true,
+    total: selectedProducts.length,
+    runnable: runnableTargets.length,
+    completed: 0,
+    successes: [],
+    failures: missingUrlTargets.map((item) => ({
+      product: item.product,
+      reason: "商品URLがありません",
+    })),
+    workerWindow,
+  };
+  state.detailFetchBatch = batch;
+  updateBulkSelectionControls(getFilteredProducts());
+
+  try {
+    for (let index = 0; index < runnableTargets.length; index += 1) {
+      const item = runnableTargets[index];
+      const label = item.product.sku || item.product.title || item.product.id;
+      if (workerWindow.closed) {
+        runnableTargets.slice(index).forEach((remaining) => {
+          batch.failures.push({ product: remaining.product, reason: "取得用タブが閉じられました" });
+        });
+        break;
+      }
+
+      showOperationStatusModal({
+        eyebrow: "商品詳細の一括取得",
+        title: `${index + 1} / ${runnableTargets.length} 件目を取得中`,
+        body: `${label} の販売ページから写真と商品情報を取得しています。`,
+        meta: [
+          `成功: ${batch.successes.length} 件`,
+          `失敗・対象外: ${batch.failures.length} 件`,
+          `出品先: ${item.target.platform}`,
+        ].join("\n"),
+        tone: "progress",
+      });
+
+      try {
+        const payload = await requestBatchDetailFetch(item, workerWindow);
+        if (!payload.ok) throw new Error(payload.error || "販売ページから詳細を取得できませんでした");
+        if (!hasUsableFetchedDetail(payload.detail)) throw new Error("取得結果に保存できる商品情報がありません");
+        await saveBatchFetchedDetail(item, payload.detail);
+        batch.successes.push(item.product);
+        state.checkedIds.delete(item.product.id);
+      } catch (error) {
+        batch.failures.push({ product: item.product, reason: error.message || "詳細取得に失敗しました" });
+      }
+      batch.completed += 1;
+
+      if (index < runnableTargets.length - 1 && !workerWindow.closed) {
+        await delayBatchDetailFetch(1500);
+      }
+    }
+  } finally {
+    if (pendingUrlDetailFetch?.mode === "batch") {
+      if (pendingUrlDetailFetch.timeoutId) window.clearTimeout(pendingUrlDetailFetch.timeoutId);
+      pendingUrlDetailFetch = null;
+    }
+    try {
+      if (!workerWindow.closed) workerWindow.close();
+    } catch (_error) {
+      // The browser may already have closed the cross-origin worker tab.
+    }
+    batch.active = false;
+    state.detailFetchBatch = null;
+    await loadProducts();
+
+    const failureLines = batch.failures.map(({ product, reason }) => (
+      `${product.sku || product.title || product.id}: ${reason}`
+    ));
+    showOperationStatusModal({
+      eyebrow: "商品詳細の一括取得",
+      title: batch.failures.length > 0 ? "一括取得が完了しました（一部未処理）" : "一括取得が完了しました",
+      body: `成功 ${batch.successes.length} 件 / 失敗・対象外 ${batch.failures.length} 件`,
+      meta: failureLines.length > 0
+        ? ["未処理の商品", ...failureLines].join("\n")
+        : "選択した商品の写真と不足していた詳細情報を保存しました。",
+      tone: batch.successes.length > 0 ? "success" : "error",
+    });
+    setStatus(`商品詳細を一括取得しました: 成功 ${batch.successes.length} 件 / 未処理 ${batch.failures.length} 件`, batch.successes.length === 0);
+  }
+}
+
+function getBatchDetailFetchTarget(product) {
+  const canonicalListing = getCanonicalListingForProductId(product.id);
+  const importedListing = getImportedListingForProduct(product);
+  const externalEntries = Object.values(product.externalData || {});
+  const candidates = [
+    { url: canonicalListing?.platformUrl, listing: canonicalListing },
+    { url: importedListing?.platformUrl, listing: importedListing },
+    { url: product.itemUrl, listing: canonicalListing || importedListing || null },
+    ...externalEntries.map((entry) => ({ url: entry?.itemUrl, listing: canonicalListing || importedListing || null })),
+  ];
+
+  for (const candidate of candidates) {
+    const url = String(candidate.url || "").trim();
+    const platform = detectPlatformFromListingUrl(url);
+    if (url && platform) return { url, platform, listing: candidate.listing || null };
+  }
+  return null;
+}
+
+function requestBatchDetailFetch(item, workerWindow) {
+  return new Promise((resolve, reject) => {
+    const requestId = crypto.randomUUID();
+    const request = {
+      type: "listing-assist-fetch-detail",
+      requestId,
+      returnOrigin: location.origin,
+      context: "batch-detail",
+      keepOpen: true,
+    };
+    const fetchUrl = new URL(item.target.url);
+    fetchUrl.hash = `${DETAIL_FETCH_HASH_KEY}=${encodeURIComponent(encodePayload(request))}`;
+
+    const timeoutId = window.setTimeout(() => {
+      if (pendingUrlDetailFetch?.requestId === requestId) pendingUrlDetailFetch = null;
+      reject(new Error("販売ページから30秒以内に応答がありませんでした"));
+    }, 30000);
+    pendingUrlDetailFetch = {
+      requestId,
+      context: "batch-detail",
+      mode: "batch",
+      startedAt: Date.now(),
+      timeoutId,
+      resolve,
+      reject,
+    };
+
+    try {
+      workerWindow.location.href = fetchUrl.toString();
+    } catch (error) {
+      window.clearTimeout(timeoutId);
+      pendingUrlDetailFetch = null;
+      reject(error);
+    }
+  });
+}
+
+function hasUsableFetchedDetail(detail) {
+  if (!detail) return false;
+  return Boolean(
+    String(detail.imageUrl || "").trim() ||
+    (Array.isArray(detail.imageUrls) && detail.imageUrls.some(Boolean)) ||
+    String(detail.title || "").trim() ||
+    String(detail.description || "").trim() ||
+    Number(detail.price || 0) > 0,
+  );
+}
+
+async function saveBatchFetchedDetail(item, detail) {
+  const product = item.product;
+  const target = item.target;
+  const now = new Date().toISOString();
+  const fetchedImages = [
+    ...(Array.isArray(detail.imageUrls) ? detail.imageUrls : []),
+    detail.imageUrl,
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  const photos = [...new Set([...(product.photos || []), ...fetchedImages])];
+  const platform = normalizePlatform(target.platform || detail.platform);
+  const updatedProduct = {
+    ...product,
+    title: String(product.title || detail.title || "").trim(),
+    photos,
+    externalData: mergeFetchedDetailIntoExternalData(product.externalData || {}, detail, {
+      platform,
+      platformItemId: detail.platformItemId || product.platformItemId || "",
+      itemUrl: target.url,
+    }),
+    updatedAt: now,
+  };
+
+  const existingListing = target.listing || null;
+  const listing = {
+    ...(existingListing || {}),
+    lid: existingListing?.lid || buildPrimaryListingId(product.id),
+    pid: existingListing ? String(existingListing.pid || "") : product.id,
+    platform: existingListing?.platform || platform,
+    platformListingId: existingListing?.platformListingId || detail.platformItemId || product.platformItemId || "",
+    platformUrl: existingListing?.platformUrl || detail.platformUrl || target.url,
+    imageUrl: existingListing?.imageUrl || fetchedImages[0] || "",
+    brand: existingListing?.brand || detail.brand || product.brand || "",
+    category: existingListing?.category || detail.category || product.category || "",
+    description: existingListing?.description || detail.description || product.description || "",
+    condition: existingListing?.condition || normalizeInternalCondition(detail.condition) || product.condition || "",
+    price: Number(existingListing?.price || detail.price || product.price || 0),
+    importedAt: existingListing?.importedAt || now,
+    importSource: existingListing?.importSource || "url-batch",
+    linkState: existingListing?.linkState || "confirmed",
+    listingStatus: existingListing?.listingStatus || product.listingStatus || "",
+    shipping: existingListing?.shipping || detail.shipping || product.shipping || "",
+    shippingSize: existingListing?.shippingSize || detail.shippingSize || product.shippingSize || "",
+    tags: Array.isArray(existingListing?.tags) ? [...existingListing.tags] : [],
+    updatedAt: now,
+  };
+
+  await database.runTransaction(["products", "listings"], "readwrite", (stores) => {
+    stores.products.put(buildProductMasterRecord(updatedProduct));
+    stores.listings.put(listing);
+  });
+}
+
+function delayBatchDetailFetch(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 function isAllowedDetailFetchOrigin(origin) {
@@ -2546,6 +2825,10 @@ function updateBulkSelectionControls(visibleProducts = getFilteredProducts()) {
       elements.bulkDeleteButton.disabled = totalCheckedCount === 0;
       elements.bulkDeleteButton.textContent = totalCheckedCount > 0 ? `選択削除 (${totalCheckedCount})` : "選択削除";
     }
+    if (elements.bulkFetchDetailsButton) {
+      elements.bulkFetchDetailsButton.disabled = true;
+      elements.bulkFetchDetailsButton.textContent = "選択商品の情報を一括取得";
+    }
     return;
   }
 
@@ -2561,6 +2844,12 @@ function updateBulkSelectionControls(visibleProducts = getFilteredProducts()) {
   if (elements.bulkDeleteButton) {
     elements.bulkDeleteButton.disabled = totalCheckedCount === 0;
     elements.bulkDeleteButton.textContent = totalCheckedCount > 0 ? `選択削除 (${totalCheckedCount})` : "選択削除";
+  }
+  if (elements.bulkFetchDetailsButton) {
+    elements.bulkFetchDetailsButton.disabled = totalCheckedCount === 0 || Boolean(state.detailFetchBatch?.active);
+    elements.bulkFetchDetailsButton.textContent = totalCheckedCount > 0
+      ? `選択商品の情報を一括取得 (${totalCheckedCount})`
+      : "選択商品の情報を一括取得";
   }
 }
 
