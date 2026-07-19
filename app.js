@@ -1194,6 +1194,16 @@ function renderReviewSummary() {
     fragment.append(clearButton);
   }
 
+  const visibleUnresolvedCount = getFilteredProducts().filter((product) => getProductLinkStatus(product).mode === "unlinked").length;
+  if (visibleUnresolvedCount > 0) {
+    const bulkConfirmButton = document.createElement("button");
+    bulkConfirmButton.type = "button";
+    bulkConfirmButton.className = "review-bulk-confirm";
+    bulkConfirmButton.textContent = `表示中の出品情報を一括確定 (${visibleUnresolvedCount})`;
+    bulkConfirmButton.addEventListener("click", wrapAsyncAction(handleConfirmVisibleLinks));
+    fragment.append(bulkConfirmButton);
+  }
+
   elements.reviewSummary.append(fragment);
 
 }
@@ -3053,8 +3063,58 @@ async function handleConfirmVisibleLinks() {
     return;
   }
 
+  if (visibleUnresolvedProducts.length === 0) {
+    setStatus(
+      `現在表示中の要確認は 商品詳細なし ${visibleMissingProducts.length} 件のみです。これらは個別に内容確認が必要です。`,
+    );
+    return;
+  }
+
+  const confirmationLines = [
+    `現在表示中の「出品情報を確認」 ${visibleUnresolvedProducts.length} 件を、この商品の詳細データとして一括保存します。`,
+    "一覧に見えている確認待ちだけが対象です。",
+  ];
+  if (visibleMissingProducts.length > 0) {
+    confirmationLines.push(`「商品詳細なし」 ${visibleMissingProducts.length} 件は対象外のまま残します。`);
+  }
+  confirmationLines.push("元のCSV取り込み行は、商品ごとの主データへ置き換わります。");
+
+  const ok = window.confirm(confirmationLines.join("\n"));
+  if (!ok) {
+    setStatus("一括確定をキャンセルしました。");
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const confirmedListings = [];
+  const supersededListingIds = [];
+  for (const product of visibleUnresolvedProducts) {
+    const linkStatus = getProductLinkStatus(product);
+    const sourceListing = linkStatus.listing;
+    if (!sourceListing) continue;
+    const nextListingId = buildPrimaryListingId(product.id);
+    confirmedListings.push({
+      ...sourceListing,
+      lid: nextListingId,
+      pid: product.id,
+      linkState: "confirmed",
+      updatedAt: now,
+    });
+    if (sourceListing.lid && sourceListing.lid !== nextListingId) {
+      supersededListingIds.push(sourceListing.lid);
+    }
+  }
+
+  await database.runTransaction(["listings"], "readwrite", (stores) => {
+    confirmedListings.forEach((listing) => stores.listings.put(listing));
+    supersededListingIds.forEach((listingId) => stores.listings.delete(listingId));
+  });
+
+  await loadProducts();
   setStatus(
-    `現在表示中: 商品詳細なし ${visibleMissingProducts.length} 件 / 出品情報を確認 ${visibleUnresolvedProducts.length} 件です。該当行の出品情報を開き、内容を確認して保存してください。`,
+    `表示中の出品情報 ${confirmedListings.length} 件を一括で確定しました。${
+      visibleMissingProducts.length > 0 ? `商品詳細なし ${visibleMissingProducts.length} 件は未処理のままです。` : ""
+    }`,
   );
 }
 
