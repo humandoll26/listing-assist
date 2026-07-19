@@ -214,6 +214,7 @@ const elements = {
   csvImportTitle: document.getElementById("csvImportTitle"),
   csvImportBody: document.getElementById("csvImportBody"),
   csvImportMeta: document.getElementById("csvImportMeta"),
+  cancelDetailFetchBatchButton: document.getElementById("cancelDetailFetchBatchButton"),
   closeCsvImportModalButton: document.getElementById("closeCsvImportModalButton"),
   backupImportConfirmModal: document.getElementById("backupImportConfirmModal"),
   backupImportConfirmTitle: document.getElementById("backupImportConfirmTitle"),
@@ -439,6 +440,7 @@ function bindEvents() {
     if (state.importInProgress) return;
     elements.csvImportModal.close();
   });
+  elements.cancelDetailFetchBatchButton?.addEventListener("click", cancelDetailFetchBatch);
   elements.closeBackupImportConfirmButton?.addEventListener("click", () => resolveBackupImportConfirm(false));
   elements.cancelBackupImportConfirmButton?.addEventListener("click", () => resolveBackupImportConfirm(false));
   elements.acceptBackupImportConfirmButton?.addEventListener("click", () => resolveBackupImportConfirm(true));
@@ -1470,6 +1472,7 @@ async function handleBulkFetchSelectedDetails() {
 
   const batch = {
     active: true,
+    cancelRequested: false,
     total: selectedProducts.length,
     runnable: runnableTargets.length,
     completed: 0,
@@ -1481,12 +1484,23 @@ async function handleBulkFetchSelectedDetails() {
     workerWindow,
   };
   state.detailFetchBatch = batch;
+  if (elements.cancelDetailFetchBatchButton) {
+    elements.cancelDetailFetchBatchButton.classList.remove("is-hidden");
+    elements.cancelDetailFetchBatchButton.disabled = false;
+    elements.cancelDetailFetchBatchButton.textContent = "処理を中止";
+  }
   updateBulkSelectionControls(getFilteredProducts());
 
   try {
     for (let index = 0; index < runnableTargets.length; index += 1) {
       const item = runnableTargets[index];
       const label = item.product.sku || item.product.title || item.product.id;
+      if (batch.cancelRequested) {
+        runnableTargets.slice(index).forEach((remaining) => {
+          batch.failures.push({ product: remaining.product, reason: "ユーザーが処理を中止しました" });
+        });
+        break;
+      }
       if (workerWindow.closed) {
         runnableTargets.slice(index).forEach((remaining) => {
           batch.failures.push({ product: remaining.product, reason: "取得用タブが閉じられました" });
@@ -1518,6 +1532,13 @@ async function handleBulkFetchSelectedDetails() {
       }
       batch.completed += 1;
 
+      if (batch.cancelRequested) {
+        runnableTargets.slice(index + 1).forEach((remaining) => {
+          batch.failures.push({ product: remaining.product, reason: "ユーザーが処理を中止しました" });
+        });
+        break;
+      }
+
       if (index < runnableTargets.length - 1 && !workerWindow.closed) {
         await delayBatchDetailFetch(1500);
       }
@@ -1534,6 +1555,11 @@ async function handleBulkFetchSelectedDetails() {
     }
     batch.active = false;
     state.detailFetchBatch = null;
+    if (elements.cancelDetailFetchBatchButton) {
+      elements.cancelDetailFetchBatchButton.classList.add("is-hidden");
+      elements.cancelDetailFetchBatchButton.disabled = false;
+      elements.cancelDetailFetchBatchButton.textContent = "処理を中止";
+    }
     await loadProducts();
 
     const failureLines = batch.failures.map(({ product, reason }) => (
@@ -1541,14 +1567,51 @@ async function handleBulkFetchSelectedDetails() {
     ));
     showOperationStatusModal({
       eyebrow: "商品詳細の一括取得",
-      title: batch.failures.length > 0 ? "一括取得が完了しました（一部未処理）" : "一括取得が完了しました",
-      body: `成功 ${batch.successes.length} 件 / 失敗・対象外 ${batch.failures.length} 件`,
+      title: batch.cancelRequested
+        ? "一括取得を中止しました"
+        : batch.failures.length > 0 ? "一括取得が完了しました（一部未処理）" : "一括取得が完了しました",
+      body: `成功 ${batch.successes.length} 件 / 未処理 ${batch.failures.length} 件`,
       meta: failureLines.length > 0
         ? ["未処理の商品", ...failureLines].join("\n")
         : "選択した商品の写真と不足していた詳細情報を保存しました。",
       tone: batch.successes.length > 0 ? "success" : "error",
     });
-    setStatus(`商品詳細を一括取得しました: 成功 ${batch.successes.length} 件 / 未処理 ${batch.failures.length} 件`, batch.successes.length === 0);
+    setStatus(
+      batch.cancelRequested
+        ? `商品詳細の一括取得を中止しました: 成功 ${batch.successes.length} 件 / 未処理 ${batch.failures.length} 件`
+        : `商品詳細を一括取得しました: 成功 ${batch.successes.length} 件 / 未処理 ${batch.failures.length} 件`,
+      !batch.cancelRequested && batch.successes.length === 0,
+    );
+  }
+}
+
+function cancelDetailFetchBatch() {
+  const batch = state.detailFetchBatch;
+  if (!batch?.active || batch.cancelRequested) return;
+
+  batch.cancelRequested = true;
+  if (elements.cancelDetailFetchBatchButton) {
+    elements.cancelDetailFetchBatchButton.disabled = true;
+    elements.cancelDetailFetchBatchButton.textContent = "停止中...";
+  }
+  showOperationStatusModal({
+    eyebrow: "商品詳細の一括取得",
+    title: "処理を停止しています",
+    body: "現在の取得を中断し、未処理の商品を選択状態のまま残します。",
+    meta: `成功済み: ${batch.successes.length} 件`,
+    tone: "progress",
+  });
+
+  if (pendingUrlDetailFetch?.mode === "batch") {
+    const pendingRequest = pendingUrlDetailFetch;
+    pendingUrlDetailFetch = null;
+    if (pendingRequest.timeoutId) window.clearTimeout(pendingRequest.timeoutId);
+    pendingRequest.reject(new Error("ユーザーが処理を中止しました"));
+  }
+  try {
+    if (batch.workerWindow && !batch.workerWindow.closed) batch.workerWindow.close();
+  } catch (_error) {
+    // Ignore close failures for a cross-origin worker tab.
   }
 }
 

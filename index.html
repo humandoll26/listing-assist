@@ -618,7 +618,10 @@
           <p id="csvImportEyebrow" class="eyebrow">CSV読み込み</p>
           <h2 id="csvImportTitle">CSV読み込み状況</h2>
         </div>
-        <button id="closeCsvImportModalButton" class="ghost-button" type="button">閉じる</button>
+        <div class="modal-heading-actions">
+          <button id="cancelDetailFetchBatchButton" class="secondary-button danger-button is-hidden" type="button">処理を中止</button>
+          <button id="closeCsvImportModalButton" class="ghost-button" type="button">閉じる</button>
+        </div>
       </div>
       <p id="csvImportBody" class="csv-import-body">CSVの読み込み状況を表示します。</p>
       <pre id="csvImportMeta" class="csv-import-meta"></pre>
