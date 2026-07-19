@@ -692,6 +692,12 @@ button:hover {
   color: #6f5a42;
 }
 
+.review-flag.is-success {
+  background: #edf7ed;
+  border-color: #a9c9aa;
+  color: #356b38;
+}
+
 .review-chip.is-danger {
   background: #fbe9e4;
   border-color: #e5b6a7;

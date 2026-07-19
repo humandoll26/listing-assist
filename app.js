@@ -2720,8 +2720,13 @@ function getProductReviewFlags(product, linkStatus = null, inventory = null) {
   if (resolvedLinkStatus.mode === "unlinked") {
     flags.push({ key: "needs_link", label: "出品情報を確認", tone: "warning" });
   }
-  if (!hasPreviewImage(product)) {
-    flags.push({ key: "image_missing", label: "画像未取得", tone: "warning" });
+  const imageCount = getProductImageCount(product);
+  if (imageCount <= 1) {
+    flags.push({
+      key: "image_missing",
+      label: imageCount === 1 ? "画像未取得（1枚のみ）" : "画像未取得",
+      tone: "warning",
+    });
   }
   if (!String(resolvedInventory?.shelfCode || product.storage || "").trim()) {
     flags.push({ key: "storage_missing", label: "棚未設定", tone: "muted" });
@@ -2792,10 +2797,18 @@ function setReviewFilter(filterKey) {
 }
 
 function hasPreviewImage(product) {
-  if (Array.isArray(product.photos) && product.photos.some((src) => String(src || "").trim() !== "")) {
-    return true;
-  }
-  return Object.values(product.externalData || {}).some((entry) => String(entry?.imageUrl || "").trim() !== "");
+  return getProductImageCount(product) > 0;
+}
+
+function getProductImageCount(product) {
+  const images = [
+    ...(Array.isArray(product?.photos) ? product.photos : []),
+    ...Object.values(product?.externalData || {}).flatMap((entry) => [
+      ...(Array.isArray(entry?.imageUrls) ? entry.imageUrls : []),
+      entry?.imageUrl,
+    ]),
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  return new Set(images).size;
 }
 
 function isImportedListing(listing) {
@@ -5716,6 +5729,10 @@ function renderPlatformCell(cell, product, linkStatus = null, reviewFlags = []) 
   }
 
   const extraFlags = reviewFlags.filter((flag) => !["detail_missing", "needs_link"].includes(flag.key));
+  const imageCount = getProductImageCount(product);
+  if (imageCount >= 2) {
+    extraFlags.push({ key: "image_complete", label: `画像取得済み（${imageCount}枚）`, tone: "success" });
+  }
   if (extraFlags.length === 0) return;
 
   const flagList = document.createElement("div");
