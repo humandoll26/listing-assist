@@ -1704,7 +1704,7 @@ async function saveBatchFetchedDetail(item, detail) {
     ...(Array.isArray(detail.imageUrls) ? detail.imageUrls : []),
     detail.imageUrl,
   ].map((value) => String(value || "").trim()).filter(Boolean);
-  const photos = [...new Set([...(product.photos || []), ...fetchedImages])];
+  const photos = dedupeProductImageUrls([...(product.photos || []), ...fetchedImages]);
   const platform = normalizePlatform(target.platform || detail.platform);
   const updatedProduct = {
     ...product,
@@ -1796,7 +1796,7 @@ function applyFetchedDetailToProductForm(detail) {
     ? detail.imageUrls
     : (detail.imageUrl ? [detail.imageUrl] : []);
   if (fetchedImages.length > 0) {
-    state.modalImages = [...new Set([...fetchedImages, ...state.modalImages].filter(Boolean))];
+    state.modalImages = dedupeProductImageUrls([...fetchedImages, ...state.modalImages]);
     renderModalPhotoPreview(state.modalImages, elements.title.value.trim() || detail.title || "商品");
   }
   renderImageFetchStatus(elements.productImageFetchStatus, getSelectedProduct(), detail);
@@ -2808,7 +2808,7 @@ function getProductImageCount(product) {
       entry?.imageUrl,
     ]),
   ].map((value) => String(value || "").trim()).filter(Boolean);
-  return new Set(images).size;
+  return dedupeProductImageUrls(images).length;
 }
 
 function isImportedListing(listing) {
@@ -3398,7 +3398,7 @@ async function saveListingDetail({ linkAfterSave = false } = {}) {
   const updatedProduct = state.listingDetailFetchedDetail
     ? {
         ...product,
-        photos: [...new Set([...(product.photos || []), ...fetchedImages])],
+        photos: dedupeProductImageUrls([...(product.photos || []), ...fetchedImages]),
         externalData: mergeFetchedDetailIntoExternalData(product.externalData || {}, fetchedDetail, {
           platform,
           platformItemId: platformListingId,
@@ -4459,8 +4459,8 @@ function buildMergedProductFromLooseInventory(existingProduct, inventory, matche
     memo: mergeLooseInventoryMemo(existingProduct.memo, inventory.linkMemo),
     photos:
       fetchedImages.length > 0
-        ? [...new Set([...fetchedImages, ...(existingProduct.photos || [])].filter(Boolean))]
-        : (imageUrl ? [imageUrl, ...((existingProduct.photos || []).filter((src) => src && src !== imageUrl))] : [...(existingProduct.photos || [])]),
+        ? dedupeProductImageUrls([...fetchedImages, ...(existingProduct.photos || [])])
+        : dedupeProductImageUrls([imageUrl, ...(existingProduct.photos || [])]),
     platformItemId,
     platformItemKey: buildPlatformItemKeyFromProduct(platform, platformItemId),
     itemUrl,
@@ -4637,10 +4637,63 @@ function renderImageFetchStatus(element, product, pendingDetail = null) {
 
 function getFetchedImageUrls(detail) {
   if (!detail) return [];
-  return [...new Set([
+  return dedupeProductImageUrls([
     ...(Array.isArray(detail.imageUrls) ? detail.imageUrls : []),
     detail.imageUrl,
-  ].map((value) => String(value || "").trim()).filter(Boolean))];
+  ]);
+}
+
+function dedupeProductImageUrls(values = []) {
+  const selected = new Map();
+  values.forEach((value) => {
+    const imageUrl = String(value || "").trim();
+    if (!imageUrl || imageUrl.startsWith("data:")) return;
+    const key = getProductImageIdentityKey(imageUrl);
+    const current = selected.get(key);
+    if (!current || getProductImageQualityScore(imageUrl) > getProductImageQualityScore(current)) {
+      selected.set(key, imageUrl);
+    }
+  });
+  return Array.from(selected.values());
+}
+
+function getProductImageIdentityKey(value) {
+  const normalized = String(value || "").trim();
+  try {
+    const parsed = new URL(normalized, location.href);
+    if (parsed.hostname.toLowerCase() === "auc-pctr.c.yimg.jp" && parsed.pathname.startsWith("/i/")) {
+      const embeddedPath = decodeURIComponent(parsed.pathname.slice(3));
+      const separatorIndex = embeddedPath.indexOf("/");
+      if (separatorIndex > 0) {
+        parsed.protocol = "https:";
+        parsed.hostname = embeddedPath.slice(0, separatorIndex).toLowerCase();
+        parsed.pathname = embeddedPath.slice(separatorIndex);
+        parsed.port = "";
+      }
+    }
+    parsed.search = "";
+    parsed.hash = "";
+    parsed.hostname = parsed.hostname.toLowerCase();
+    parsed.pathname = parsed.pathname.replace(/\/i-img\d+x\d+-/i, "/i-imgSIZE-");
+    return parsed.toString();
+  } catch (_error) {
+    return normalized.replace(/[?#].*$/, "");
+  }
+}
+
+function getProductImageQualityScore(value) {
+  const normalized = String(value || "");
+  let score = 0;
+  try {
+    const parsed = new URL(normalized, location.href);
+    if (parsed.hostname.toLowerCase() === "auctions.c.yimg.jp") score += 1_000_000_000;
+    if (parsed.hostname.toLowerCase() === "auc-pctr.c.yimg.jp") score -= 1_000_000_000;
+  } catch (_error) {
+    // Relative and legacy image paths are still eligible for exact de-duplication.
+  }
+  const sizeMatch = normalized.match(/i-img(\d+)x(\d+)-/i);
+  if (sizeMatch) score += Number(sizeMatch[1]) * Number(sizeMatch[2]);
+  return score;
 }
 
 function downloadFile(filename, content, mimeType) {
